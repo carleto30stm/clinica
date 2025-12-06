@@ -24,6 +24,7 @@ import {
   Chip,
   Alert,
 } from '@mui/material';
+import { ConfirmModal } from '../../components/modal/ConfirmModal';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -41,6 +42,9 @@ export const DoctorManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [resetPasswordDialog, setResetPasswordDialog] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<CreateUserData>({
@@ -116,14 +120,23 @@ export const DoctorManagement: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('¿Está seguro de eliminar este usuario?')) {
-      try {
-        await userApi.delete(id);
-        loadUsers();
-      } catch (err) {
-        setError('Error al eliminar el usuario');
-      }
+  const requestDelete = (id: string) => {
+    setDeleteTargetId(id);
+    setConfirmDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTargetId) return;
+    setDeleting(true);
+    try {
+      await userApi.delete(deleteTargetId);
+      loadUsers();
+    } catch (err) {
+      setError('Error al eliminar el usuario');
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteOpen(false);
+      setDeleteTargetId(null);
     }
   };
 
@@ -217,7 +230,7 @@ export const DoctorManagement: React.FC = () => {
                   <IconButton onClick={() => setResetPasswordDialog(user.id)} title="Restablecer contraseña">
                     <ResetIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleDelete(user.id)} color="error" title="Eliminar">
+                  <IconButton onClick={() => requestDelete(user.id)} color="error" title="Eliminar">
                     <DeleteIcon />
                   </IconButton>
                 </TableCell>
@@ -325,6 +338,20 @@ export const DoctorManagement: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        title="Eliminar usuario"
+        description="¿Está seguro de eliminar este usuario? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        onConfirm={handleDelete}
+        onCancel={() => {
+          setConfirmDeleteOpen(false);
+          setDeleteTargetId(null);
+        }}
+        loading={deleting}
+      />
     </Box>
   );
 };
