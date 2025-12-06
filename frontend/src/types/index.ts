@@ -1,0 +1,164 @@
+// User types
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: 'ADMIN' | 'DOCTOR';
+  specialty?: string | null;
+  phone?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AuthUser extends Omit<User, 'createdAt' | 'updatedAt' | 'phone'> {
+  specialty: string | null;
+}
+
+// Auth types
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthState {
+  user: AuthUser | null;
+  tokens: TokenPair | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+// Shift types
+export type ShiftType = 'FIXED' | 'ROTATING';
+export type DayCategory = 'WEEKDAY' | 'WEEKEND' | 'HOLIDAY';
+export type AssignmentStatus = 'AVAILABLE' | 'SELF_ASSIGNED' | 'ADMIN_ASSIGNED';
+
+// Doctor assignment info (from ShiftDoctor junction table)
+export interface ShiftDoctorAssignment {
+  doctor: {
+    id: string;
+    name: string;
+    specialty: string | null;
+  };
+  isSelfAssigned: boolean;
+  assignedAt: string;
+}
+
+export interface Shift {
+  id: string;
+  startDateTime: string;
+  endDateTime: string;
+  type: ShiftType;
+  dayCategory: DayCategory;
+  assignmentStatus: AssignmentStatus;
+  selfAssignable: boolean;
+  isAvailable: boolean;
+  requiredDoctors?: number;  // Number of doctors required for this shift
+  doctorId: string | null;   // Legacy single doctor field
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Legacy single doctor (for backwards compatibility)
+  doctor?: {
+    id: string;
+    name: string;
+    specialty: string | null;
+  } | null;
+  // New: multiple doctors
+  doctors?: ShiftDoctorAssignment[];
+  createdByAdmin?: {
+    id: string;
+    name: string;
+  };
+  holiday?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+export interface CreateShiftData {
+  startDateTime: string;
+  endDateTime: string;
+  type: ShiftType;
+  dayCategory?: DayCategory;
+  selfAssignable?: boolean;
+  requiredDoctors?: number;
+  doctorId?: string | null;
+  doctorIds?: string[];  // New: multiple doctors
+  notes?: string;
+}
+
+export interface UpdateShiftData extends Partial<CreateShiftData> {
+  assignmentStatus?: AssignmentStatus;
+}
+
+// Holiday types
+export interface Holiday {
+  id: string;
+  date: string;
+  name: string;
+  isRecurrent: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateHolidayData {
+  date: string;
+  name: string;
+  isRecurrent?: boolean;
+}
+
+export interface UpdateHolidayData extends Partial<CreateHolidayData> {}
+
+// Stats types
+export interface DoctorHoursSummary {
+  doctorId: string;
+  doctorName: string;
+  specialty: string | null;
+  totalHours: number;
+  shiftCount: number;
+  fixedShifts: number;
+  rotatingShifts: number;
+}
+
+export interface MonthlyStats {
+  month: number;
+  year: number;
+  totalShifts: number;
+  assignedShifts: number;
+  availableShifts: number;
+  totalHours: number;
+  doctorsSummary: DoctorHoursSummary[];
+}
+
+export interface DailyCoverage {
+  date: string;
+  isWeekend: boolean;
+  shifts: Shift[];
+  coveragePercentage: number;
+}
+
+export interface CoverageResponse {
+  month: number;
+  year: number;
+  coverage: DailyCoverage[];
+}
+
+// Doctor simplified
+export interface DoctorOption {
+  id: string;
+  name: string;
+  specialty: string | null;
+}
+
+// API Response types
+export interface ApiError {
+  error: string;
+  code?: string;
+  details?: Array<{ field: string; message: string }>;
+}

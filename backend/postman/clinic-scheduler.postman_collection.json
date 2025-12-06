@@ -1,0 +1,305 @@
+{
+  "info": {
+    "name": "Clinic Scheduler API",
+    "_postman_id": "clinic-scheduler-api-collection",
+    "description": "Colección Postman para probar la API de Clinic Scheduler (backend)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.tokens) {",
+                  "  pm.environment.set('accessToken', res.tokens.accessToken);",
+                  "  pm.environment.set('refreshToken', res.tokens.refreshToken);",
+                  "}",
+                  "if (res.user && res.user.id) {",
+                  "  pm.environment.set('adminId', res.user.id);",
+                  "}",
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Doctor Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{doctorEmail}}\",\n  \"password\": \"{{doctorPassword}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.tokens) {",
+                  "  pm.environment.set('doctorAccessToken', res.tokens.accessToken);",
+                  "  pm.environment.set('doctorRefreshToken', res.tokens.refreshToken);",
+                  "}",
+                  "if (res.user && res.user.id) {",
+                  "  pm.environment.set('doctorId', res.user.id);",
+                  "}",
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.tokens) { pm.environment.set('accessToken', res.tokens.accessToken); pm.environment.set('refreshToken', res.tokens.refreshToken); }",
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"}
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+          }
+        },
+        {
+          "name": "Get Current User (me)",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key":"Content-Type","value":"application/json"},
+              {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"}
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"admin1234\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/change-password", "host": ["{{baseUrl}}"], "path": ["api", "auth", "change-password"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Doctors (Dropdown)",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/users/doctors", "host": ["{{baseUrl}}"], "path": ["api", "users", "doctors"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (Array.isArray(res.doctors) && res.doctors.length > 0) { pm.environment.set('doctorId', res.doctors[0].id); }",
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Users (admin)",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [ {"key":"Content-Type","value":"application/json"}, {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new.doctor@clinica.com\",\n  \"password\": \"doctor123\",\n  \"name\": \"Dr. Nuevo\",\n  \"role\": \"DOCTOR\",\n  \"specialty\": \"Medicina General\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.user && res.user.id) { pm.environment.set('createdUserId', res.user.id); }",
+                  "pm.test('Status is 201', function() { pm.response.to.have.status(201); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get User by Id",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/users/{{createdUserId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{createdUserId}}"] }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [ {"key":"Content-Type","value":"application/json"}, {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dr. Actualizado\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/api/users/{{createdUserId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{createdUserId}}"] }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [ {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/users/{{createdUserId}}", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{createdUserId}}"] }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [ {"key":"Content-Type","value":"application/json"}, {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "body": { "mode": "raw", "raw": "{\n  \"newPassword\": \"newpass123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/users/{{createdUserId}}/reset-password", "host": ["{{baseUrl}}"], "path": ["api", "users", "{{createdUserId}}", "reset-password"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shifts",
+      "item": [
+        {
+          "name": "Get Available Shifts",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{doctorAccessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/shifts/available", "host": ["{{baseUrl}}"], "path": ["api", "shifts", "available"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (Array.isArray(res.data) && res.data.length > 0) { pm.environment.set('shiftId', res.data[0].id); }",
+                  "pm.test('Status is 200', function() { pm.response.to.have.status(200); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get My Shifts (Doctor)",
+          "request": {
+            "method": "GET",
+            "header": [ {"key":"Authorization","value":"Bearer {{doctorAccessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/shifts/my", "host": ["{{baseUrl}}"], "path": ["api", "shifts", "my"] }
+          }
+        },
+        {
+          "name": "Create Shift (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [ {"key":"Content-Type","value":"application/json"}, {"key":"Authorization","value":"Bearer {{accessToken}}","type":"text"} ],
+            "body": { "mode": "raw", "raw": "{\n  \"startDateTime\": \"2025-12-20T08:00:00.000Z\",\n  \"endDateTime\": \"2025-12-20T14:00:00.000Z\",\n  \"type\": \"FIXED\",\n  \"doctorId\": \"{{doctorId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/shifts", "host": ["{{baseUrl}}"], "path": ["api", "shifts"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.id) { pm.environment.set('createdShiftId', res.data.id); }",
+                  "pm.test('Status is 201', function() { pm.response.to.have.status(201); });"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Self-assign Shift (Doctor)",
+          "request": {
+            "method": "POST",
+            "header": [ {"key":"Authorization","value":"Bearer {{doctorAccessToken}}","type":"text"} ],
+            "url": { "raw": "{{baseUrl}}/api/shifts/{{shiftId}}/self-assign", "host": ["{{baseUrl}}"], "path": ["api", "shifts", "{{shiftId}}", "self-assign"] }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001" },
+    { "key": "adminEmail", "value": "admin@clinica.com" },
+    { "key": "adminPassword", "value": "admin123" },
+    { "key": "doctorEmail", "value": "dr.garcia@clinica.com" },
+    { "key": "doctorPassword", "value": "doctor123" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "adminId", "value": "" },
+    { "key": "doctorId", "value": "" },
+    { "key": "createdUserId", "value": "" },
+    { "key": "createdShiftId", "value": "" },
+    { "key": "shiftId", "value": "" }
+  ]
+}

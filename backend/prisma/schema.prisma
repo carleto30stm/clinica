@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+}
+
+enum ShiftType {
+  FIXED
+  ROTATING
+}
+
+enum DayCategory {
+  WEEKDAY
+  WEEKEND
+  HOLIDAY
+}
+
+enum AssignmentStatus {
+  AVAILABLE        // Disponible para tomar
+  SELF_ASSIGNED    // Auto-asignado por doctor (bloqueado para el doctor)
+  ADMIN_ASSIGNED   // Asignado por admin
+}
+
+enum AuditAction {
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  SHIFT_CREATED
+  SHIFT_UPDATED
+  SHIFT_DELETED
+  SHIFT_ASSIGNED
+  SHIFT_SELF_ASSIGNED
+  SHIFT_UNASSIGNED
+  LOGIN
+  LOGOUT
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role       @default(DOCTOR)
+  specialty    String?
+  phone        String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  shifts       Shift[]    @relation("DoctorShifts")  // Deprecated: legacy single doctor
+  shiftAssignments ShiftDoctor[]  // New: many-to-many with shifts
+  createdShifts Shift[]   @relation("CreatedByAdmin")
+  auditLogs    AuditLog[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model Shift {
+  id               String           @id @default(uuid())
+  startDateTime    DateTime
+  endDateTime      DateTime
+  type             ShiftType
+  dayCategory      DayCategory      @default(WEEKDAY)
+  assignmentStatus AssignmentStatus @default(AVAILABLE)
+  selfAssignable   Boolean          @default(false)  // Si true, doctor puede auto-asignarse
+  isAvailable      Boolean          @default(true)   // Deprecado, usar assignmentStatus
+  requiredDoctors  Int              @default(1)      // Cantidad de médicos requeridos para el turno
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relations - Legacy single doctor (deprecated, mantener para compatibilidad)
+  doctorId         String?
+  doctor           User?            @relation("DoctorShifts", fields: [doctorId], references: [id], onDelete: SetNull)
+  
+  // New: many-to-many with doctors
+  doctors          ShiftDoctor[]
+  
+  createdByAdminId String
+  createdByAdmin   User             @relation("CreatedByAdmin", fields: [createdByAdminId], references: [id])
+
+  holidayId        String?
+  holiday          Holiday?         @relation(fields: [holidayId], references: [id], onDelete: SetNull)
+
+  auditLogs        AuditLog[]
+
+  @@index([startDateTime, endDateTime])
+  @@index([doctorId])
+  @@index([dayCategory])
+  @@index([assignmentStatus])
+  @@map("shifts")
+}
+
+// Junction table for many-to-many relationship between Shift and User (doctors)
+model ShiftDoctor {
+  id        String   @id @default(uuid())
+  shiftId   String
+  doctorId  String
+  assignedAt DateTime @default(now())
+  assignedBy String?  // Admin who assigned (null if self-assigned)
+  isSelfAssigned Boolean @default(false)
+  
+  shift     Shift    @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  doctor    User     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  @@unique([shiftId, doctorId])  // Un doctor solo puede estar una vez en cada turno
+  @@index([shiftId])
+  @@index([doctorId])
+  @@map("shift_doctors")
+}
+
+model Holiday {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date
+  name        String
+  isRecurrent Boolean  @default(false)  // Si true, se repite cada año (ej: Navidad)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shifts      Shift[]
+
+  @@unique([date])
+  @@map("holidays")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  action    AuditAction
+  details   String?     // JSON string with additional details
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime    @default(now())
+
+  // Relations
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  shiftId   String?
+  shift     Shift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}

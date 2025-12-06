@@ -1,0 +1,63 @@
+# Node modules
+node_modules/
+
+# Build output
+dist/
+build/
+lib/
+
+# Typescript cache
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Prisma: ignore generated client (is usually inside node_modules/.prisma)
+node_modules/.prisma
+
+scripts/create-admin.ts
+scripts/create-admin.js
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+cache/
+
+# Coverage
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs/editor
+.vscode/
+.idea/
+
+# Database files (if used for local development)
+dev.db
+
+# Misc
+*.tgz
+*.zip
+
+# Audit files
+npm-audit.json
+
+# Optional: generated client from prisma (if generated to folder)
+.prisma/
+
+# Optional: lockfile for tmp tools
+npm-debug.log
+
+# Keep package-lock and pnpm-lock, do not ignore them by default
