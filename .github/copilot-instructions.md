@@ -39,6 +39,16 @@ Sistema de gestión de turnos para clínica médica. Permite a administradores g
    - Funciones pequeñas y enfocadas
    - Comentarios solo cuando el código no es auto-explicativo
 
+### Guardrails to avoid runtime errors and regressions
+
+- **Do NOT** store JSX or React components inside state initializers or state values. State should hold serializable data only (primitives, objects, arrays) — never components, elements, or functions that render UI. This prevents confusing build/compile errors and unintended runtime behavior.
+- **Avoid heavy inline logic inside `return` JSX.** Compute derived values, formatting, and conditional strings above the `return` into well-named variables or helper functions. This keeps JSX readable and simplifies unit testing.
+- **Input validation & parsing:** Don't run `new Date()` or parse user input until you have validated it using util validators (e.g., `isValidMonth`, `isValidDateString` in `src/utils/validators.ts`). Invalid dates can cause NaN and blank pages.
+- **Use 'selected' vs 'applied' pattern for filters.** For free-text or date input fields, keep an editable `selectedX` value and a separate `appliedX` value that triggers load or API calls. Apply filters only when the value is valid and accepted by the user (button or Enter), to avoid partial state crashes.
+- **Don't mutate or reassign global state directly inside UI event handlers without validation.** Always validate, format, and guard before calling API or updating persisted stores.
+- **Prefer reusable components over repeating JSX logic.** Extract common controls into `components/filters` or similar and use them across pages.
+- **Always include unit or integration tests** for critical input handling and data parsing logic (`validators`, `formatters`) and for any component that accepts free-form input.
+
 ### Utils & Formatters
 
 Crear y usar utilidades compartidas:
@@ -272,6 +282,22 @@ const handleChange = (field: keyof FormData) => (
 - [ ] UI text en español
 - [ ] Sin console.log en producción
 - [ ] Errores manejados apropiadamente
+
+- [ ] Run TypeScript build on both backend & frontend
+  - Backend: `npm --prefix backend run build`
+  - Frontend: `npm --prefix frontend run build`
+- [ ] Run linters and formatters (`npm --prefix backend run lint`, `npm --prefix frontend run lint` if configured)
+- [ ] Run tests: `npm --prefix backend run test` and `npm --prefix frontend run test` (if present)
+- [ ] Manual acceptance checks for UI input flows:
+  - Validate month/day filters with correct and incorrect input
+  - Verify UI doesn't crash when typing partially into date/month inputs
+  - Confirm the selected vs applied filtering behavior
+  - Confirm that frontend types match backend DTOs, and express-validator rules match TypeScript definitions
+
+## When to run builds and tests
+
+- Ensure `npm run build` (both backend and frontend) passes locally before creating a PR. Automated CI will still run it, but it prevents obvious regression from being proposed in a PR.
+- If you change API payloads: update `frontend/src/types` and `backend/src/types` accordingly, then re-run the builds and tests.
 
 ## Mobile & Responsiveness (High Priority)
 

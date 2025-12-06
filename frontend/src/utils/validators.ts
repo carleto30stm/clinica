@@ -15,6 +15,26 @@ export const isValidPassword = (password: string): boolean => {
 };
 
 /**
+ * Validate month format YYYY-MM
+ */
+export const isValidMonth = (value: string): boolean => {
+  if (!value) return false;
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+};
+
+/**
+ * Validate date format YYYY-MM-DD
+ */
+export const isValidDateString = (value: string): boolean => {
+  if (!value) return false;
+  // Simple check, then ensure Date parsing matches
+  const match = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.test(value);
+  if (!match) return false;
+  const d = new Date(value);
+  return !Number.isNaN(d.getTime());
+};
+
+/**
  * Validate phone format (Spanish)
  */
 export const isValidPhone = (phone: string): boolean => {

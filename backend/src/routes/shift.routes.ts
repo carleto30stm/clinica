@@ -84,6 +84,18 @@ router.put(
 // Delete shift (admin only)
 router.delete('/:id', requireAdmin, shiftController.remove);
 
+// Bulk delete shifts (admin only)
+router.post(
+  '/bulk-delete',
+  requireAdmin,
+  [
+    body('ids').isArray({ min: 1 }).withMessage('Se requiere una lista de IDs'),
+    body('ids.*').isUUID().withMessage('ID de turno inválido'),
+  ],
+  validate,
+  shiftController.bulkDelete
+);
+
 // Self-assign shift (doctors)
 router.post('/:id/self-assign', shiftController.selfAssign);
 

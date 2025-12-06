@@ -43,6 +43,11 @@ export const shiftApi = {
     await api.delete(`/shifts/${id}`);
   },
 
+  bulkDelete: async (ids: string[]): Promise<{ message?: string }> => {
+    const response = await api.post<{ message?: string }>('/shifts/bulk-delete', { ids });
+    return response.data;
+  },
+
   bulkCreate: async (shifts: CreateShiftData[]): Promise<Shift[]> => {
     const response = await api.post<ShiftsResponse>('/shifts/bulk', { shifts });
     return response.data.shifts;

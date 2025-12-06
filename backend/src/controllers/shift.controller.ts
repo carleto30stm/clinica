@@ -733,6 +733,55 @@ export const bulkCreate = async (
 };
 
 /**
+ * Bulk delete shifts (admin only)
+ */
+export const bulkDelete = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'Se requiere una lista de IDs de turnos para eliminar' });
+      return;
+    }
+
+    // Validate shifts exist
+    const existing = await prisma.shift.findMany({ where: { id: { in: ids } }, select: { id: true, startDateTime: true, endDateTime: true, doctorId: true } });
+    if (existing.length !== ids.length) {
+      const foundIds = new Set(existing.map((s) => s.id));
+      const missingIds = ids.filter((id) => !foundIds.has(id));
+      res.status(404).json({ error: `Turnos no encontrados: ${missingIds.join(', ')}` });
+      return;
+    }
+
+    // Prepare audit logs
+    const auditLogs = existing.map((s) => ({
+      action: 'SHIFT_DELETED',
+      userId: req.user!.id,
+      details: JSON.stringify({ deletedShiftId: s.id, startDateTime: s.startDateTime, endDateTime: s.endDateTime, doctorId: s.doctorId }),
+    }));
+
+    // Delete ShiftDoctor entries and then shifts in a transaction, then create audit logs
+    await prisma.$transaction(async (tx) => {
+      await tx.shiftDoctor.deleteMany({ where: { shiftId: { in: ids } } });
+      await tx.shift.deleteMany({ where: { id: { in: ids } } });
+      await tx.auditLog.createMany({ data: auditLogs as any });
+    });
+
+    res.json({ message: `${existing.length} turnos eliminados` });
+  } catch (error) {
+    if ((error as any)?.code === 'P2003') {
+      res.status(400).json({ error: 'No se puede eliminar el turno debido a restricciones en la base de datos' });
+      return;
+    }
+    next(error);
+  }
+};
+
+/**
  * Batch update shift assignments (admin only)
  * Allows assigning multiple doctors to multiple shifts in a single request
  * Now supports multiple doctors per shift using ShiftDoctor junction table
