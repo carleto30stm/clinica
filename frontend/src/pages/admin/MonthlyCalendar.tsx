@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 // DnD kit
 import { 
   DndContext, 
@@ -13,11 +13,17 @@ import {
   pointerWithin,
 } from '@dnd-kit/core';
 import { shiftApi } from '../../api/shifts';
-import { userApi } from '../../api/users';
 import { QuickAssignModal } from '../../components/shifts/QuickAssignModal';
+import MobileMonthList from '../../components/calendar/MobileMonthList';
+import { ConfirmModal } from '../../components/modal/ConfirmModal';
 import { CreateShiftModal } from '../../components/shifts/CreateShiftModal';
+import EditShiftModal from '../../components/shifts/EditShiftModal';
 import { Shift, DoctorOption, CreateShiftData } from '../../types';
 import { useAuthStore } from '../../store/authStore';
+import { useUIStore } from '../../store/uiStore';
+import { useShifts, useDoctors, useUpdateShift, useSelfAssignShift } from '../../hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../../lib/queryClient';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -66,6 +72,10 @@ import {
   Snackbar,
   Fade,
 } from '@mui/material';
+import {
+  ToggleButtonGroup,
+  ToggleButton,
+} from '@mui/material';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { getInitials, getDoctorColor } from '../../utils/helpers';
 import {
@@ -77,26 +87,81 @@ import {
   Close as CloseIcon,
   PersonAdd as PersonAddIcon,
   Add as AddIcon,
+  People as PeopleIcon,
+  ViewModule as ViewModule,
+  ViewList as ViewList,
+  Devices as DevicesIcon,
 } from '@mui/icons-material';
 // DnD kit imports
 // DnD kit will be added later. For now, we implement a Unassigned pool + move modal as fallback.
-export const MonthlyCalendar: React.FC = () => {
+
+interface MonthlyCalendarProps {
+  readOnly?: boolean;
+}
+
+export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = false }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [filterDoctor, setFilterDoctor] = useState<string>('');
+  
+  // React Query hooks para datos
+  const startDate = startOfMonth(currentDate).toISOString();
+  const endDate = endOfMonth(currentDate).toISOString();
+  
+  const { 
+    data: shifts = [], 
+    isLoading: shiftsLoading, 
+    error: shiftsError,
+  } = useShifts({ startDate, endDate });
+  
+  const { 
+    data: doctors = [], 
+    isLoading: doctorsLoading 
+  } = useDoctors();
+  
+  // Query client para invalidación manual
+  const queryClient = useQueryClient();
+  
+  // Mutations
+  const updateShiftMutation = useUpdateShift();
+  const selfAssignMutation = useSelfAssignShift();
+
+  const handleUpdateShift = async (id: string, data: any) => {
+    setSavingShiftId(id);
+    try {
+      await updateShiftMutation.mutateAsync({ id, data });
+      setSnackbar({ open: true, message: 'Turno actualizado', severity: 'success' });
+      queryClient.invalidateQueries({ queryKey: queryKeys.shifts.all });
+      handleCloseEdit();
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error al actualizar el turno', severity: 'error' });
+    } finally {
+      setSavingShiftId(null);
+    }
+  };
+  
+  // UI Store para preferencias persistidas
+  const { calendarPreferences, setCalendarViewMode } = useUIStore();
+  
+  // Estados derivados
+  const loading = shiftsLoading || doctorsLoading;
+  const error = shiftsError ? 'Error al cargar los datos' : '';
+  
   // Modal state for moving shifts (must be before any early return)
   const [moveModalOpen, setMoveModalOpen] = useState(false);
   const [shiftToMove, setShiftToMove] = useState<Shift | null>(null);
   const [moveDate, setMoveDate] = useState<string>('');
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'ADMIN';
+  // In readOnly mode, disable all editing capabilities
+  const isAdmin = !readOnly && user?.role === 'ADMIN';
 
   // Responsive design
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // noSsr: true ensures accurate detection on first render (avoids hydration mismatch)
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'), { noSsr: true });
+  // Use persisted view mode from UI store
+  const viewMode = calendarPreferences.viewMode;
+  // In 'auto' mode, show list on mobile, grid on desktop
+  const showList = viewMode === 'list' || (viewMode === 'auto' && isMobile);
   
   // State for expanded day view (mobile)
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -110,6 +175,11 @@ export const MonthlyCalendar: React.FC = () => {
   // State for Create Shift Modal
   const [createShiftOpen, setCreateShiftOpen] = useState(false);
   const [createShiftDate, setCreateShiftDate] = useState<Date | null>(null);
+  // State for mobile day detail drawer
+  const [dayDetailOpen, setDayDetailOpen] = useState(false);
+  const [dayDetailDate, setDayDetailDate] = useState<Date | null>(null);
+  const [confirmAssignOpen, setConfirmAssignOpen] = useState(false);
+  const [assigningShift, setAssigningShift] = useState<Shift | null>(null);
   
   // Snackbar state for success/error feedback
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
@@ -122,6 +192,7 @@ export const MonthlyCalendar: React.FC = () => {
   const [savingShiftId, setSavingShiftId] = useState<string | null>(null);
   // Selected shift to show assigned doctors list
   const [selectedShiftDetails, setSelectedShiftDetails] = useState<Shift | null>(null);
+  const [editingShift, setEditingShift] = useState<Shift | null>(null);
   
   // State for active drag item (for DragOverlay)
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
@@ -134,35 +205,6 @@ export const MonthlyCalendar: React.FC = () => {
       },
     })
   );
-
-  
-
-  useEffect(() => {
-    loadData();
-  }, [currentDate]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
-      
-      const [shiftsData, doctorsData] = await Promise.all([
-        shiftApi.getAll({
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-        }),
-        userApi.getDoctors(),
-      ]);
-      
-      setShifts(shiftsData);
-      setDoctors(doctorsData);
-    } catch (err) {
-      setError('Error al cargar los datos');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -254,15 +296,14 @@ export const MonthlyCalendar: React.FC = () => {
     newStart.setHours(origStart.getHours(), origStart.getMinutes(), 0, 0);
     const newEnd = new Date(newStart.getTime() + duration);
 
-    const prevShifts = [...shifts];
-    setShifts(prev => prev.map(s => s.id === shiftToMove.id ? { ...s, startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() } : s));
     try {
-      const updated = await shiftApi.update(shiftToMove.id, { startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() });
-      setShifts(prev => prev.map(s => s.id === shiftToMove.id ? updated : s));
+      await updateShiftMutation.mutateAsync({
+        id: shiftToMove.id,
+        data: { startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() }
+      });
       setSnackbar({ open: true, message: 'Turno movido correctamente', severity: 'success' });
       closeMoveModal();
     } catch (err: any) {
-      setShifts(prevShifts);
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error al mover el turno', severity: 'error' });
     } finally {
       setSavingShiftId(null);
@@ -281,12 +322,9 @@ export const MonthlyCalendar: React.FC = () => {
   };
 
   const handleQuickAssignSave = async (updates: Array<{ shiftId: string; doctorIds: string[] }>) => {
-    const updatedShifts = await shiftApi.batchAssign(updates);
-    // Update local state with the updated shifts
-    setShifts(prev => {
-      const updatedMap = new Map(updatedShifts.map(s => [s.id, s]));
-      return prev.map(s => updatedMap.get(s.id) || s);
-    });
+    await shiftApi.batchAssign(updates);
+    // Invalidar cache de shifts para que React Query haga refetch
+    queryClient.invalidateQueries({ queryKey: queryKeys.shifts.all });
     const totalDoctors = updates.reduce((sum, u) => sum + u.doctorIds.length, 0);
     setSnackbar({ open: true, message: `${totalDoctors} médico(s) asignado(s) en ${updates.length} turno(s)`, severity: 'success' });
   };
@@ -306,21 +344,69 @@ export const MonthlyCalendar: React.FC = () => {
   const closeCreateShift = () => {
     setCreateShiftOpen(false);
     setCreateShiftDate(null);
+    setEditingShift(null);
   };
 
   const handleCreateShiftSave = async (data: CreateShiftData) => {
     try {
-      const newShift = await shiftApi.create(data);
-      setShifts(prev => [...prev, newShift]);
-      setSnackbar({ open: true, message: 'Turno creado correctamente', severity: 'success' });
+      if (editingShift) {
+        await updateShiftMutation.mutateAsync({ id: editingShift.id, data });
+        setSnackbar({ open: true, message: 'Turno actualizado correctamente', severity: 'success' });
+      } else {
+        await shiftApi.create(data);
+        setSnackbar({ open: true, message: 'Turno creado correctamente', severity: 'success' });
+      }
+      // Invalidar cache para refetch
+      queryClient.invalidateQueries({ queryKey: queryKeys.shifts.all });
       closeCreateShift();
     } catch (err: any) {
       setSnackbar({ 
         open: true, 
-        message: err.response?.data?.error || 'Error al crear el turno', 
+        message: err.response?.data?.error || (editingShift ? 'Error al actualizar el turno' : 'Error al crear el turno'), 
         severity: 'error' 
       });
       throw err; // Re-throw to let modal handle loading state
+    }
+  };
+
+  // Mobile day detail handlers
+  const openDayDetails = (date: Date) => {
+    setDayDetailDate(date);
+    setDayDetailOpen(true);
+  };
+  const closeDayDetails = () => {
+    setDayDetailOpen(false);
+    setDayDetailDate(null);
+  };
+
+  const handleRequestAssign = (shift: Shift) => {
+    setAssigningShift(shift);
+    setConfirmAssignOpen(true);
+  };
+
+  const handleOpenEdit = (shift: Shift) => {
+    // Open the edit modal with the shift data
+    setEditingShift(shift);
+    setSelectedShiftDetails(null);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingShift(null);
+  };
+
+  const handleAssignConfirm = async () => {
+    if (!assigningShift) return;
+    setSavingShiftId(assigningShift.id);
+    try {
+      await selfAssignMutation.mutateAsync(assigningShift.id);
+      setSnackbar({ open: true, message: 'Turno asignado', severity: 'success' });
+      setConfirmAssignOpen(false);
+      setAssigningShift(null);
+      closeDayDetails();
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error al asignar', severity: 'error' });
+    } finally {
+      setSavingShiftId(null);
     }
   };
   
@@ -607,6 +693,29 @@ export const MonthlyCalendar: React.FC = () => {
               </Badge>
             </IconButton>
           )}
+          {/* View toggle (grid/list) */}
+          <Box display="flex" alignItems="center" gap={1}>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              size={isMobile ? 'small' : 'medium'}
+              onChange={(_, v) => v && setCalendarViewMode(v)}
+              aria-label="view mode"
+            >
+              <ToggleButton value="auto" aria-label="auto view">
+                <Tooltip title="Automático (según tamaño de pantalla)"><DevicesIcon /></Tooltip>
+              </ToggleButton>
+              <ToggleButton value="grid" aria-label="grid view">
+                <Tooltip title="Cuadrícula"><ViewModule /></Tooltip>
+              </ToggleButton>
+              <ToggleButton value="list" aria-label="list view">
+                <Tooltip title="Lista"><ViewList /></Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          <Box>
+            <Typography variant="caption">{viewMode === 'auto' ? (isMobile ? 'Lista (auto)' : 'Cuadrícula (auto)') : (viewMode === 'list' ? 'Lista' : 'Cuadrícula')}</Typography>
+          </Box>
         </Stack>
       </Box>
       
@@ -637,6 +746,15 @@ export const MonthlyCalendar: React.FC = () => {
         </Alert>
       )}
 
+      {showList ? (
+        <MobileMonthList
+          days={days}
+          shifts={shifts}
+          onOpenDayDetails={openDayDetails}
+          onQuickAssign={(s) => handleRequestAssign(s)}
+          onCreateShift={isAdmin ? openCreateShift : undefined}
+        />
+      ) : (
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
@@ -668,18 +786,18 @@ export const MonthlyCalendar: React.FC = () => {
           setSavingShiftId(shift.id);
           
           // Move shift to date dayStr
-          const prevShifts = [...shifts];
           const origStart = new Date(shift.startDateTime);
           const duration = new Date(shift.endDateTime).getTime() - origStart.getTime();
           const newStart = new Date(dayStr);
           newStart.setHours(origStart.getHours(), origStart.getMinutes(), 0, 0);
           const newEnd = new Date(newStart.getTime() + duration);
-          setShifts(prev => prev.map(s => s.id === shift.id ? { ...s, startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() } : s));
-          shiftApi.update(shift.id, { startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() }).then((updated) => {
-            setShifts(prev => prev.map(s => s.id === updated.id ? updated : s));
+          
+          updateShiftMutation.mutateAsync({
+            id: shift.id,
+            data: { startDateTime: newStart.toISOString(), endDateTime: newEnd.toISOString() }
+          }).then(() => {
             setSnackbar({ open: true, message: 'Turno movido correctamente', severity: 'success' });
           }).catch((err) => {
-            setShifts(prevShifts);
             setSnackbar({ open: true, message: err.response?.data?.error || 'Error al mover el turno', severity: 'error' });
           }).finally(() => {
             setSavingShiftId(null);
@@ -739,6 +857,7 @@ export const MonthlyCalendar: React.FC = () => {
         ) : null}
       </DragOverlay>
       </DndContext>
+      )}
 
       {/* Legend - hide on mobile */}
       {!isMobile && (
@@ -806,6 +925,67 @@ export const MonthlyCalendar: React.FC = () => {
           </Box>
         </Box>
       </Drawer>
+
+      {/* Drawer for day details - used by mobile list */}
+      <Drawer
+        anchor={isMobile ? 'bottom' : 'right'}
+        open={dayDetailOpen}
+        onClose={closeDayDetails}
+        PaperProps={{ sx: isMobile ? { maxHeight: '70vh', borderTopLeftRadius: 16, borderTopRightRadius: 16 } : { width: 420 } }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+            <Typography variant="h6">{dayDetailDate ? format(dayDetailDate, "EEEE d 'de' MMMM", { locale: es }) : 'Detalle'}</Typography>
+            <IconButton onClick={closeDayDetails}><CloseIcon /></IconButton>
+          </Box>
+          <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
+            {dayDetailDate && getShiftsForDay(dayDetailDate).map((shift) => (
+              <Card key={shift.id} sx={{ mb: 1 }} variant="outlined">
+                <CardContent sx={{ py: 1 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box>
+                      <Typography variant="body2" fontWeight="medium">{format(new Date(shift.startDateTime), 'HH:mm')} - {format(new Date(shift.endDateTime), 'HH:mm')}</Typography>
+                      <Typography variant="caption" color="text.secondary">{shift.notes || '-'}</Typography>
+                      <Box mt={1} display="flex" gap={1} alignItems="center">
+                        <PeopleIcon fontSize="small" />
+                        <Chip label={`${shift.doctors?.length || (shift.doctorId ? 1 : 0)}/${shift.requiredDoctors || 1}`} size="small" />
+                      </Box>
+                    </Box>
+                    <Box>
+                      {(!shift.doctorId || (shift.doctors && (shift.doctors.length < (shift.requiredDoctors || 1)))) && user?.role !== 'ADMIN' && (
+                        <Button size="small" variant="contained" color="success" onClick={() => handleRequestAssign(shift)}>Asignarme</Button>
+                      )}
+                      {isAdmin && (
+                        <Button size="small" variant="outlined" onClick={() => { handleOpenEdit(shift); }}>Editar</Button>
+                      )}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </Box>
+      </Drawer>
+
+      {/* Confirm assign modal used by day detail */}
+      <ConfirmModal
+        open={confirmAssignOpen}
+        title="Confirmar asignación"
+        description={assigningShift ? `¿Quieres asignarte el turno de ${format(new Date(assigningShift.startDateTime), 'HH:mm')}?` : undefined}
+        confirmText="Asignarme"
+        onConfirm={handleAssignConfirm}
+        onCancel={() => { setConfirmAssignOpen(false); setAssigningShift(null); }}
+        loading={!!savingShiftId}
+      />
+
+      {/* Mobile FAB for creating shifts (admin only) */}
+      {isAdmin && !isMobile && (
+        <Box sx={{ position: 'fixed', bottom: 16, right: 16, zIndex: 1400 }}>
+          <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={() => openCreateShift(new Date())}>
+            Crear
+          </Button>
+        </Box>
+      )}
       {/* Move Shift Modal */}
       <Dialog open={moveModalOpen} onClose={closeMoveModal} maxWidth="xs" fullWidth>
         <DialogTitle>Mover Turno</DialogTitle>
@@ -912,6 +1092,13 @@ export const MonthlyCalendar: React.FC = () => {
         date={createShiftDate}
         doctors={doctors}
         onSave={handleCreateShiftSave}
+      />
+      <EditShiftModal
+        open={!!editingShift}
+        onClose={handleCloseEdit}
+        shift={editingShift}
+        doctors={doctors}
+        onUpdate={handleUpdateShift}
       />
     </Box>
     </React.Fragment>

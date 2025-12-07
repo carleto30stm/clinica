@@ -1,11 +1,14 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { es } from 'date-fns/locale';
 
 import theme from './theme';
+import { queryClient } from './lib/queryClient';
 import { useAuthStore } from './store/authStore';
 
 // Components
@@ -79,6 +82,7 @@ const AppRoutes: React.FC = () => {
         <Route index element={<MyShifts />} />
         <Route path="available" element={<AvailableShifts />} />
         <Route path="calendar" element={<DoctorCalendar />} />
+        <Route path="general-calendar" element={<MonthlyCalendar readOnly />} />
       </Route>
 
       {/* Redirect */}
@@ -89,14 +93,18 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
-        <CssBaseline />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </LocalizationProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
+          <CssBaseline />
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </LocalizationProvider>
+      </ThemeProvider>
+      {/* DevTools solo en desarrollo */}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 };
 

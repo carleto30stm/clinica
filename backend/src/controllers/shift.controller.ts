@@ -179,7 +179,7 @@ export const create = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { startDateTime, endDateTime, type, selfAssignable, doctorId, doctorIds, notes, dayCategory: providedDayCategory } = req.body;
+    const { startDateTime, endDateTime, type, selfAssignable, requiredDoctors, doctorId, doctorIds, notes, dayCategory: providedDayCategory } = req.body;
 
     // Validate dates
     const start = new Date(startDateTime);
@@ -256,6 +256,7 @@ export const create = async (
           selfAssignable: isSelfAssignable,
           assignmentStatus,
           isAvailable: doctorsToAssign.length === 0,
+          requiredDoctors: requiredDoctors || 1,
           doctorId: doctorsToAssign.length > 0 ? doctorsToAssign[0] : null,
           notes,
           createdByAdminId: req.user!.id,
@@ -316,7 +317,7 @@ export const update = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { startDateTime, endDateTime, type, dayCategory, selfAssignable, assignmentStatus, doctorId, notes } = req.body;
+    const { startDateTime, endDateTime, type, dayCategory, selfAssignable, assignmentStatus, doctorId, doctorIds, requiredDoctors, notes } = req.body;
 
     const existingShift = await prisma.shift.findUnique({ where: { id } });
 
@@ -408,6 +409,49 @@ export const update = async (
       newAssignmentStatus = doctorId ? 'ADMIN_ASSIGNED' : 'AVAILABLE';
     }
 
+    // Handle multiple doctors via doctorIds
+    if (doctorIds !== undefined && Array.isArray(doctorIds)) {
+      // Check for duplicate doctors in the request
+      const uniqueDoctorIds = [...new Set(doctorIds)];
+      if (uniqueDoctorIds.length !== doctorIds.length) {
+        res.status(400).json({ error: 'No se puede asignar el mismo médico más de una vez al turno' });
+        return;
+      }
+
+      // Check for overlapping shifts for each doctor
+      for (const docId of uniqueDoctorIds) {
+        const overlapping = await prisma.shift.findFirst({
+          where: {
+            id: { not: id },
+            OR: [
+              { doctorId: docId },
+              { doctors: { some: { doctorId: docId } } },
+            ],
+            startDateTime: { lt: end },
+            endDateTime: { gt: start },
+          },
+        });
+        if (overlapping) {
+          const doctor = await prisma.user.findUnique({ where: { id: docId }, select: { name: true } });
+          res.status(400).json({ error: `El médico ${doctor?.name || docId} ya tiene un turno asignado en ese horario` });
+          return;
+        }
+      }
+
+      // Remove all existing doctor assignments and re-add
+      await prisma.shiftDoctor.deleteMany({ where: { shiftId: id } });
+      
+      if (uniqueDoctorIds.length > 0) {
+        await prisma.shiftDoctor.createMany({
+          data: uniqueDoctorIds.map(docId => ({
+            shiftId: id,
+            doctorId: docId,
+            isSelfAssigned: false,
+          })),
+        });
+      }
+    }
+
     const shift = await prisma.shift.update({
       where: { id },
       data: {
@@ -416,6 +460,7 @@ export const update = async (
         ...(type && { type }),
         ...(newDayCategory && { dayCategory: newDayCategory }),
         ...(selfAssignable !== undefined && { selfAssignable }),
+        ...(requiredDoctors !== undefined && { requiredDoctors }),
         ...(newAssignmentStatus && { assignmentStatus: newAssignmentStatus }),
         ...(doctorId !== undefined && { 
           doctorId, 
@@ -430,6 +475,18 @@ export const update = async (
             name: true,
             specialty: true,
           },
+        },
+        doctors: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                name: true,
+                specialty: true,
+              },
+            },
+          },
+          orderBy: { assignedAt: 'asc' },
         },
       },
     });
@@ -496,6 +553,7 @@ export const remove = async (
 /**
  * Self-assign available shift (doctor only)
  * Only ROTATING shifts on weekends/holidays that are marked as selfAssignable
+ * Supports multiple doctors up to requiredDoctors limit
  */
 export const selfAssign = async (
   req: Request,
@@ -505,7 +563,15 @@ export const selfAssign = async (
   try {
     const { id } = req.params;
 
-    const shift = await prisma.shift.findUnique({ where: { id } });
+    // Fetch shift with current doctor assignments
+    const shift = await prisma.shift.findUnique({
+      where: { id },
+      include: {
+        doctors: {
+          select: { doctorId: true },
+        },
+      },
+    });
 
     if (!shift) {
       res.status(404).json({ error: 'Turno no encontrado' });
@@ -515,16 +581,6 @@ export const selfAssign = async (
     // Check if shift is available for self-assignment
     if (!shift.selfAssignable) {
       res.status(400).json({ error: 'Este turno no está disponible para auto-asignación' });
-      return;
-    }
-
-    if (shift.assignmentStatus !== 'AVAILABLE') {
-      res.status(400).json({ error: 'Este turno ya no está disponible' });
-      return;
-    }
-
-    if (shift.doctorId) {
-      res.status(400).json({ error: 'Este turno ya está asignado a otro médico' });
       return;
     }
 
@@ -540,15 +596,31 @@ export const selfAssign = async (
       return;
     }
 
-    // Check for overlapping shifts
+    // Check how many doctors are already assigned
+    const currentDoctorCount = shift.doctors.length;
+    const requiredDoctors = shift.requiredDoctors || 1;
+
+    // Check if shift is already full
+    if (currentDoctorCount >= requiredDoctors) {
+      res.status(400).json({ error: 'Este turno ya tiene todos los médicos requeridos' });
+      return;
+    }
+
+    // Check if doctor is already assigned to this shift
+    const alreadyAssigned = shift.doctors.some((d) => d.doctorId === req.user!.id);
+    if (alreadyAssigned) {
+      res.status(400).json({ error: 'Ya estás asignado a este turno' });
+      return;
+    }
+
+    // Check for overlapping shifts (both legacy doctorId and ShiftDoctor)
     const overlapping = await prisma.shift.findFirst({
       where: {
-        doctorId: req.user!.id,
+        startDateTime: { lt: shift.endDateTime },
+        endDateTime: { gt: shift.startDateTime },
         OR: [
-          {
-            startDateTime: { lt: shift.endDateTime },
-            endDateTime: { gt: shift.startDateTime },
-          },
+          { doctorId: req.user!.id },
+          { doctors: { some: { doctorId: req.user!.id } } },
         ],
       },
     });
@@ -558,23 +630,41 @@ export const selfAssign = async (
       return;
     }
 
-    const updatedShift = await prisma.shift.update({
-      where: { id },
-      data: {
-        doctorId: req.user!.id,
-        isAvailable: false,
-        assignmentStatus: 'SELF_ASSIGNED',
-        selfAssignable: false, // Lock the shift after self-assignment
-      },
-      include: {
-        doctor: {
-          select: {
-            id: true,
-            name: true,
-            specialty: true,
+    // Determine if this is the last slot
+    const isLastSlot = currentDoctorCount + 1 >= requiredDoctors;
+
+    // Create assignment and update shift in transaction
+    const updatedShift = await prisma.$transaction(async (tx) => {
+      // Create ShiftDoctor entry
+      await tx.shiftDoctor.create({
+        data: {
+          shiftId: id,
+          doctorId: req.user!.id,
+          isSelfAssigned: true,
+        },
+      });
+
+      // Update shift status
+      const updated = await tx.shift.update({
+        where: { id },
+        data: {
+          // Set legacy doctorId to first doctor if not set
+          doctorId: shift.doctorId || req.user!.id,
+          isAvailable: !isLastSlot,
+          // Only mark as SELF_ASSIGNED and lock when fully assigned
+          assignmentStatus: isLastSlot ? 'SELF_ASSIGNED' : 'AVAILABLE',
+          selfAssignable: !isLastSlot, // Lock only when all slots are filled
+        },
+        include: {
+          doctor: { select: { id: true, name: true, specialty: true } },
+          doctors: {
+            include: { doctor: { select: { id: true, name: true, specialty: true } } },
+            orderBy: { assignedAt: 'asc' },
           },
         },
-      },
+      });
+
+      return updated;
     });
 
     // Log the action
@@ -583,17 +673,22 @@ export const selfAssign = async (
         action: 'SHIFT_SELF_ASSIGNED',
         userId: req.user!.id,
         shiftId: id,
-        details: JSON.stringify({ 
+        details: JSON.stringify({
           selfAssigned: true,
           dayCategory: shift.dayCategory,
+          slotNumber: currentDoctorCount + 1,
+          totalSlots: requiredDoctors,
+          isFull: isLastSlot,
         }),
       },
     });
 
-    res.json({ 
-      shift: updatedShift, 
-      message: 'Turno asignado exitosamente. Este turno ya no puede ser modificado.' 
-    });
+    const slotsRemaining = requiredDoctors - (currentDoctorCount + 1);
+    const message = isLastSlot
+      ? 'Turno asignado exitosamente. El turno está completo.'
+      : `Turno asignado exitosamente. Quedan ${slotsRemaining} plaza(s) disponible(s).`;
+
+    res.json({ shift: updatedShift, message });
   } catch (error) {
     next(error);
   }
@@ -635,6 +730,7 @@ export const getMyShifts = async (
 /**
  * Get available shifts (for doctors to self-assign)
  * Only returns ROTATING shifts on weekends/holidays that are selfAssignable
+ * Filters out shifts that are already full (doctors.length >= requiredDoctors)
  */
 export const getAvailable = async (
   req: Request,
@@ -648,8 +744,6 @@ export const getAvailable = async (
       selfAssignable: true,
       type: 'ROTATING',
       dayCategory: { in: ['WEEKEND', 'HOLIDAY'] },
-      assignmentStatus: 'AVAILABLE',
-      doctorId: null,
       startDateTime: { gte: new Date() }, // Only future shifts
     };
 
@@ -664,6 +758,14 @@ export const getAvailable = async (
       where,
       orderBy: { startDateTime: 'asc' },
       include: {
+        doctors: {
+          include: {
+            doctor: {
+              select: { id: true, name: true, specialty: true },
+            },
+          },
+          orderBy: { assignedAt: 'asc' },
+        },
         holiday: {
           select: {
             id: true,
@@ -673,7 +775,24 @@ export const getAvailable = async (
       },
     });
 
-    res.json({ shifts });
+    // Filter out shifts that are already full and check if current user is already assigned
+    const userId = req.user!.id;
+    const availableShifts = shifts.filter((shift) => {
+      const currentCount = shift.doctors.length;
+      const required = shift.requiredDoctors || 1;
+      const hasSpace = currentCount < required;
+      const alreadyAssigned = shift.doctors.some((d) => d.doctorId === userId);
+      return hasSpace && !alreadyAssigned;
+    });
+
+    // Add computed fields for frontend
+    const shiftsWithSlotInfo = availableShifts.map((shift) => ({
+      ...shift,
+      assignedCount: shift.doctors.length,
+      slotsAvailable: (shift.requiredDoctors || 1) - shift.doctors.length,
+    }));
+
+    res.json({ shifts: shiftsWithSlotInfo });
   } catch (error) {
     next(error);
   }
@@ -708,6 +827,7 @@ export const bulkCreate = async (
           selfAssignable: isSelfAssignable,
           assignmentStatus: shift.doctorId ? 'ADMIN_ASSIGNED' as const : 'AVAILABLE' as const,
           isAvailable: !shift.doctorId,
+          requiredDoctors: shift.requiredDoctors || 1,
           doctorId: shift.doctorId,
           notes: shift.notes,
           createdByAdminId: req.user!.id,

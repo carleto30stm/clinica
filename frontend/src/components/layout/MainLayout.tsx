@@ -60,6 +60,7 @@ const doctorNavItems: NavItem[] = [
   { text: 'Mis Turnos', icon: <CalendarIcon />, path: '/doctor' },
   { text: 'Turnos Disponibles', icon: <AvailableIcon />, path: '/doctor/available' },
   { text: 'Mi Calendario', icon: <CalendarIcon />, path: '/doctor/calendar' },
+  { text: 'Calendario General', icon: <PeopleIcon />, path: '/doctor/general-calendar' },
 ];
 
 export const MainLayout: React.FC = () => {

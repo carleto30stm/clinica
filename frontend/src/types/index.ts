@@ -59,6 +59,8 @@ export interface Shift {
   selfAssignable: boolean;
   isAvailable: boolean;
   requiredDoctors?: number;  // Number of doctors required for this shift
+  assignedCount?: number;    // Current number of assigned doctors
+  slotsAvailable?: number;   // Remaining slots for self-assignment
   doctorId: string | null;   // Legacy single doctor field
   notes: string | null;
   createdAt: string;

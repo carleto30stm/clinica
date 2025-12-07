@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -19,8 +19,8 @@ import {
   DialogActions,
   Snackbar,
 } from '@mui/material';
-import { EventAvailable as AssignIcon, Warning as WarningIcon } from '@mui/icons-material';
-import { shiftApi } from '../../api/shifts';
+import { EventAvailable as AssignIcon, Warning as WarningIcon, People as PeopleIcon } from '@mui/icons-material';
+import { useAvailableShifts, useSelfAssignShift } from '../../hooks';
 import { Shift, DayCategory } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -44,41 +44,23 @@ const getDayCategoryColor = (category: DayCategory): 'default' | 'error' | 'warn
 };
 
 export const AvailableShifts: React.FC = () => {
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // React Query hooks
+  const { data: shifts = [], isLoading: loading, error: queryError } = useAvailableShifts();
+  const selfAssignMutation = useSelfAssignShift();
+  
+  const [error, setError] = useState(queryError ? 'Error al cargar los turnos disponibles' : '');
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
-  const [assigning, setAssigning] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-
-  useEffect(() => {
-    loadShifts();
-  }, []);
-
-  const loadShifts = async () => {
-    try {
-      const data = await shiftApi.getAvailable();
-      setShifts(data);
-    } catch (err) {
-      setError('Error al cargar los turnos disponibles');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAssign = async () => {
     if (!selectedShift) return;
 
-    setAssigning(true);
     try {
-      await shiftApi.selfAssign(selectedShift.id);
+      await selfAssignMutation.mutateAsync(selectedShift.id);
       setSuccessMessage('¡Turno asignado correctamente! Este turno ya no puede ser modificado.');
       setSelectedShift(null);
-      loadShifts();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al asignar el turno');
-    } finally {
-      setAssigning(false);
     }
   };
 
@@ -118,7 +100,7 @@ export const AvailableShifts: React.FC = () => {
               <TableCell>Fecha</TableCell>
               <TableCell>Tipo de Día</TableCell>
               <TableCell>Horario</TableCell>
-              <TableCell>Tipo de Turno</TableCell>
+              <TableCell>Plazas</TableCell>
               <TableCell>Notas</TableCell>
               <TableCell align="center">Acción</TableCell>
             </TableRow>
@@ -127,6 +109,9 @@ export const AvailableShifts: React.FC = () => {
             {shifts.map((shift) => {
               const start = new Date(shift.startDateTime);
               const end = new Date(shift.endDateTime);
+              const required = shift.requiredDoctors || 1;
+              const assigned = shift.assignedCount || 0;
+              const available = shift.slotsAvailable ?? (required - assigned);
 
               return (
                 <TableRow key={shift.id}>
@@ -146,11 +131,20 @@ export const AvailableShifts: React.FC = () => {
                     {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={shift.type === 'FIXED' ? 'Fijo' : 'Rotativo'}
-                      color={shift.type === 'FIXED' ? 'primary' : 'secondary'}
-                      size="small"
-                    />
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <PeopleIcon fontSize="small" color="action" />
+                      <Chip
+                        label={`${assigned}/${required}`}
+                        size="small"
+                        color={available === 1 ? 'warning' : 'default'}
+                        variant="outlined"
+                      />
+                      {shift.doctors && shift.doctors.length > 0 && (
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                          ({shift.doctors.map(d => d.doctor.name.split(' ')[0]).join(', ')})
+                        </Typography>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell>{shift.notes || '-'}</TableCell>
                   <TableCell align="center">
@@ -199,6 +193,13 @@ export const AvailableShifts: React.FC = () => {
                   {format(new Date(selectedShift.startDateTime), 'HH:mm')} -{' '}
                   {format(new Date(selectedShift.endDateTime), 'HH:mm')}
                 </Typography>
+                <Typography>
+                  <strong>Plazas:</strong>{' '}
+                  {selectedShift.assignedCount || 0}/{selectedShift.requiredDoctors || 1} ocupadas
+                  {selectedShift.doctors && selectedShift.doctors.length > 0 && (
+                    <> ({selectedShift.doctors.map(d => d.doctor.name).join(', ')})</>  
+                  )}
+                </Typography>
                 {selectedShift.notes && (
                   <Typography>
                     <strong>Notas:</strong> {selectedShift.notes}
@@ -214,9 +215,9 @@ export const AvailableShifts: React.FC = () => {
             onClick={handleAssign}
             variant="contained"
             color="success"
-            disabled={assigning}
+            disabled={selfAssignMutation.isPending}
           >
-            {assigning ? <CircularProgress size={24} /> : 'Confirmar'}
+            {selfAssignMutation.isPending ? <CircularProgress size={24} /> : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>

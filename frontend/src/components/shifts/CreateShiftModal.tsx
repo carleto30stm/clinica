@@ -153,7 +153,7 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
         endDateTime: endDate.toISOString(),
         type: shiftType,
         selfAssignable,
-        requiredDoctors,
+        requiredDoctors: Math.max(1, requiredDoctors),
         doctorIds: selectedDoctors.map((d) => d.id),
         notes: notes || undefined,
       };
@@ -265,18 +265,6 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
           </Select>
         </FormControl>
 
-        {/* Required doctors */}
-        <TextField
-          label="Médicos requeridos"
-          type="number"
-          value={requiredDoctors}
-          onChange={(e) => setRequiredDoctors(Math.max(1, parseInt(e.target.value) || 1))}
-          size="small"
-          fullWidth
-          sx={{ mb: 2 }}
-          InputProps={{ inputProps: { min: 1, max: 10 } }}
-        />
-
         {/* Self-assignable toggle */}
         <FormControlLabel
           control={
@@ -289,6 +277,41 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
           sx={{ mb: 2, display: 'block' }}
         />
 
+        {/* Required doctors - only shown when selfAssignable */}
+        {selfAssignable && (
+          <TextField
+            label="Médicos requeridos"
+            type="number"
+            value={requiredDoctors === 0 ? '' : requiredDoctors}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                // Permitir vacío temporalmente para poder escribir
+                setRequiredDoctors(0);
+              } else {
+                const num = parseInt(val, 10);
+                if (!isNaN(num) && num >= 1 && num <= 10) {
+                  setRequiredDoctors(num);
+                  // Si hay más médicos seleccionados que los requeridos, recortar
+                  if (selectedDoctors.length > num) {
+                    setSelectedDoctors(selectedDoctors.slice(0, num));
+                  }
+                }
+              }
+            }}
+            onBlur={() => {
+              // Al salir del campo, si está vacío, poner 1
+              if (requiredDoctors === 0) {
+                setRequiredDoctors(1);
+              }
+            }}
+            size="small"
+            fullWidth
+            sx={{ mb: 2 }}
+            inputProps={{ min: 1, max: 10 }}
+          />
+        )}
+
         {/* Pre-assign doctors */}
         <Autocomplete
           multiple
@@ -296,9 +319,30 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
           options={doctors}
           getOptionLabel={(option) => option.name}
           value={selectedDoctors}
-          onChange={(_, value) => setSelectedDoctors(value)}
+          onChange={(_, value) => {
+            // Filtrar duplicados
+            const uniqueValue = value.filter((doc, index, self) => 
+              index === self.findIndex(d => d.id === doc.id)
+            );
+            // Solo limitar si es auto-asignable
+            if (selfAssignable) {
+              setSelectedDoctors(uniqueValue.slice(0, requiredDoctors));
+            } else {
+              setSelectedDoctors(uniqueValue);
+            }
+          }}
+          isOptionEqualToValue={(option, value) => option.id === value.id}
+          getOptionDisabled={(option) => 
+            selectedDoctors.some(d => d.id === option.id) || 
+            (selfAssignable && selectedDoctors.length >= requiredDoctors && !selectedDoctors.some(d => d.id === option.id))
+          }
           renderInput={(params) => (
-            <TextField {...params} label="Asignar médicos (opcional)" placeholder="Buscar..." />
+            <TextField 
+              {...params} 
+              label={selfAssignable ? `Asignar médicos (máx. ${requiredDoctors})` : 'Asignar médicos'} 
+              placeholder={!selfAssignable || selectedDoctors.length < requiredDoctors ? "Buscar..." : ""} 
+              helperText={selfAssignable && selectedDoctors.length >= requiredDoctors ? `Límite alcanzado (${requiredDoctors})` : undefined}
+            />
           )}
           renderTags={(value, getTagProps) =>
             value.map((option, index) => (

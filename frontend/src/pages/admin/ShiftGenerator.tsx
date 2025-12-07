@@ -26,6 +26,7 @@ import {
   Weekend as WeekendIcon,
   Today as TodayIcon,
 } from '@mui/icons-material';
+import { ConfirmModal } from '../../components/modal/ConfirmModal';
 import { shiftApi } from '../../api/shifts';
 import { holidayApi } from '../../api/holidays';
 import { Holiday, CreateShiftData } from '../../types';
@@ -71,9 +72,15 @@ export const ShiftGenerator: React.FC = () => {
   const [includeWeekdays, setIncludeWeekdays] = useState(true);
   const [includeWeekends, setIncludeWeekends] = useState(true);
   const [includeHolidays, setIncludeHolidays] = useState(true);
+  
+  // Required doctors for self-assignable shifts
+  const [requiredDoctors, setRequiredDoctors] = useState(1);
 
   // Preview
   const [preview, setPreview] = useState<ShiftPreview[]>([]);
+  
+  // Confirm modal
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     loadHolidays();
@@ -146,12 +153,16 @@ export const ShiftGenerator: React.FC = () => {
     setPreview(shifts);
   };
 
-  const handleGenerate = async () => {
+  const requestGenerate = () => {
     if (preview.length === 0) {
       setError('No hay turnos para generar. Selecciona al menos un tipo de día.');
       return;
     }
+    setConfirmOpen(true);
+  };
 
+  const handleGenerate = async () => {
+    setConfirmOpen(false);
     setGenerating(true);
     setError('');
     setSuccess('');
@@ -171,6 +182,7 @@ export const ShiftGenerator: React.FC = () => {
           endDateTime: endDateTime.toISOString(),
           type: shift.type,
           selfAssignable: shift.selfAssignable,
+          requiredDoctors: shift.selfAssignable ? requiredDoctors : 1,
           doctorId: null, // Sin médico asignado
           notes: shift.holidayName ? `Feriado: ${shift.holidayName}` : undefined,
         };
@@ -320,11 +332,29 @@ export const ShiftGenerator: React.FC = () => {
 
           <Divider sx={{ my: 2 }} />
 
+          <Typography variant="subtitle2" gutterBottom>
+            Médicos por turno (auto-asignables)
+          </Typography>
+
+          <TextField
+            label="Médicos requeridos"
+            type="number"
+            value={requiredDoctors}
+            onChange={(e) => setRequiredDoctors(Math.max(1, parseInt(e.target.value) || 1))}
+            size="small"
+            fullWidth
+            InputProps={{ inputProps: { min: 1, max: 10 } }}
+            helperText="Cantidad de médicos que pueden tomar cada turno auto-asignable"
+            sx={{ mb: 2 }}
+          />
+
+          <Divider sx={{ my: 2 }} />
+
           <Button
             variant="contained"
             size="large"
             fullWidth
-            onClick={handleGenerate}
+            onClick={requestGenerate}
             disabled={generating || preview.length === 0}
             startIcon={generating ? <CircularProgress size={20} /> : <CheckIcon />}
           >
@@ -434,6 +464,17 @@ export const ShiftGenerator: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+
+      {/* Confirm Generate Modal */}
+      <ConfirmModal
+        open={confirmOpen}
+        title="Confirmar generación de turnos"
+        description={`¿Está seguro de generar ${preview.length} turnos para el mes seleccionado? Esta acción creará los turnos sin médico asignado.`}
+        confirmText="Generar"
+        onConfirm={handleGenerate}
+        onCancel={() => setConfirmOpen(false)}
+        loading={generating}
+      />
     </Box>
   );
 };

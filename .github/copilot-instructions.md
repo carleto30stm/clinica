@@ -17,7 +17,8 @@ Sistema de gestión de turnos para clínica médica. Permite a administradores g
 - **Framework:** React 18 + Vite
 - **Language:** TypeScript
 - **UI:** Material-UI v5
-- **State:** Zustand con persist middleware
+- **Server State:** TanStack Query (React Query) v5 para cache y fetching
+- **UI State:** Zustand con persist middleware (auth, preferencias UI)
 - **HTTP:** Axios con interceptors
 - **Dates:** date-fns con locale español
 
@@ -120,18 +121,101 @@ throw new AppError('Mensaje de error', 400);
 // Componentes: Functional con hooks
 const MyComponent: React.FC<Props> = ({ prop1, prop2 }) => { };
 
-// Custom Hooks: Extraer lógica reutilizable
-const useShifts = () => {
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  // ...
-  return { shifts, loading, error, refetch };
-};
+// Custom Hooks: Usar React Query para datos del servidor
+// Ubicación: src/hooks/useShifts.ts, useUsers.ts, useHolidays.ts
+
+// ❌ Incorrecto: useState + useEffect para datos del servidor
+const [shifts, setShifts] = useState<Shift[]>([]);
+useEffect(() => { fetchShifts().then(setShifts); }, []);
+
+// ✅ Correcto: React Query hooks
+const { data: shifts, isLoading, error } = useShifts(month, year);
 
 // API calls: Centralizar en src/api/
 // No hacer fetch directamente en componentes
 
-// Estado global: Zustand stores en src/store/
-// Estado local: useState para UI específica
+// Estado del servidor: TanStack Query (src/hooks/)
+// Estado de UI persistente: Zustand stores (src/store/)
+// Estado local efímero: useState para UI específica del componente
+```
+
+### TanStack Query Conventions
+
+```typescript
+// Query Keys: Centralizados en src/lib/queryClient.ts
+export const queryKeys = {
+  shifts: {
+    all: ['shifts'] as const,
+    list: (filters: { month?: number; year?: number }) => 
+      [...queryKeys.shifts.all, 'list', filters] as const,
+    my: (month?: number, year?: number) => 
+      [...queryKeys.shifts.all, 'my', { month, year }] as const,
+  },
+  // ... más keys
+};
+
+// Hooks de Query: Siempre retornar objeto completo
+export const useShifts = (month?: number, year?: number) => {
+  return useQuery({
+    queryKey: queryKeys.shifts.list({ month, year }),
+    queryFn: () => shiftsApi.getAll({ month, year }),
+  });
+};
+
+// Mutations: Siempre invalidar cache relacionado
+export const useUpdateShift = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }) => shiftsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.shifts.all });
+    },
+  });
+};
+
+// Configuración de cache (ya definida en queryClient.ts):
+// - staleTime: 2 minutos (datos considerados frescos)
+// - gcTime: 10 minutos (retención en cache)
+// - Doctors/Holidays: staleTime más largo (5-10 min) por ser datos estables
+
+// ❌ Incorrecto: Llamar API directamente y manejar estado local
+const handleSave = async () => {
+  await api.updateShift(id, data);
+  setShifts(prev => prev.map(s => s.id === id ? {...s, ...data} : s));
+};
+
+// ✅ Correcto: Usar mutation que invalida cache
+const updateShift = useUpdateShift();
+const handleSave = () => {
+  updateShift.mutate({ id, data });
+};
+```
+
+### Zustand UI Store Conventions
+
+```typescript
+// Solo para estado de UI persistente, NO para datos del servidor
+// Ubicación: src/store/uiStore.ts
+
+interface UIStore {
+  // Preferencias de UI que persisten entre sesiones
+  calendarPreferences: {
+    viewMode: 'grid' | 'list';
+    filterDoctorId: string | null;
+  };
+  sidebarOpen: boolean;
+  lastViewedDate: string | null;
+}
+
+// Usar con persist middleware para localStorage
+export const useUIStore = create<UIStore>()(
+  persist(
+    (set) => ({
+      // ... estado y acciones
+    }),
+    { name: 'clinic-ui-preferences' }
+  )
+);
 ```
 
 ### Formatters (Crear en ambos proyectos)
@@ -200,9 +284,10 @@ frontend/
   src/
     api/          # Llamadas HTTP centralizadas
     components/   # Componentes reutilizables/ modal/ tablas etc.
-    hooks/        # Custom hooks
+    hooks/        # React Query hooks (useShifts, useUsers, useHolidays)
+    lib/          # Configuración de librerías (queryClient.ts)
     pages/        # Páginas/vistas
-    store/        # Zustand stores
+    store/        # Zustand stores (auth, UI preferences)
     theme/        # Configuración MUI
     types/        # Interfaces TypeScript
     utils/        # Utilidades y formatters
@@ -248,7 +333,20 @@ frontend/
 // Backend: Middleware centralizado
 app.use(errorHandler);
 
-// Frontend: Try-catch con estados
+// Frontend con React Query: Los errores se manejan automáticamente
+const { data, error, isError } = useShifts();
+if (isError) {
+  showError(getErrorMessage(error));
+}
+
+// Frontend Mutations: Usar callbacks onError/onSuccess
+const updateShift = useUpdateShift();
+updateShift.mutate(data, {
+  onSuccess: () => showSuccess('Turno actualizado'),
+  onError: (error) => showError(getErrorMessage(error)),
+});
+
+// Para operaciones fuera de React Query (legacy):
 try {
   setLoading(true);
   await api.createShift(data);
@@ -282,6 +380,8 @@ const handleChange = (field: keyof FormData) => (
 - [ ] UI text en español
 - [ ] Sin console.log en producción
 - [ ] Errores manejados apropiadamente
+- [ ] Datos del servidor gestionados con React Query hooks (no useState+useEffect)
+- [ ] Mutations invalidan cache correctamente
 
 - [ ] Run TypeScript build on both backend & frontend
   - Backend: `npm --prefix backend run build`
