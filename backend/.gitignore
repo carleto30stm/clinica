@@ -19,6 +19,7 @@ node_modules/.prisma
 
 scripts/create-admin.ts
 scripts/create-admin.js
+postman/
 
 # Logs
 npm-debug.log*
