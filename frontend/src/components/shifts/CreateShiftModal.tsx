@@ -66,9 +66,9 @@ const stringToColor = (str: string): string => {
 // Preset shift times
 const SHIFT_PRESETS = [
   { label: 'Guardia 24h', startTime: '08:00', endTime: '08:00', isNextDay: true },
-  { label: 'Mañana (8-14)', startTime: '08:00', endTime: '14:00', isNextDay: false },
-  { label: 'Tarde (14-20)', startTime: '14:00', endTime: '20:00', isNextDay: false },
-  { label: 'Noche (20-8)', startTime: '20:00', endTime: '08:00', isNextDay: true },
+  { label: 'Mañana (9-15)', startTime: '09:00', endTime: '15:00', isNextDay: false },
+  { label: 'Tarde (15-21)', startTime: '15:00', endTime: '21:00', isNextDay: false },
+  { label: 'Noche (21-9)', startTime: '21:00', endTime: '09:00', isNextDay: true },
   { label: 'Personalizado', startTime: '', endTime: '', isNextDay: false },
 ];
 

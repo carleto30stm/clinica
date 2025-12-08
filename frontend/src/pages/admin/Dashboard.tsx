@@ -1,68 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box,
-  Grid,
-  Card,
-  CardContent,
   Typography,
+  Button,
+  Paper,
+  Divider,
   CircularProgress,
   Alert,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
 } from '@mui/material';
 import {
-  People as PeopleIcon,
-  CalendarMonth as CalendarIcon,
-  EventAvailable as AvailableIcon,
-  AccessTime as TimeIcon,
+  BarChart as BarChartIcon,
+  NavigateNext as NavigateNextIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { statsApi } from '../../api/stats';
-import { MonthlyStats, DoctorHoursSummary } from '../../types';
-
-interface StatCardProps {
-  title: string;
-  value: string | number;
-  icon: React.ReactNode;
-  color: string;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color }) => (
-  <Card>
-    <CardContent>
-      <Box display="flex" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography color="text.secondary" gutterBottom variant="body2">
-            {title}
-          </Typography>
-          <Typography variant="h4" component="div">
-            {value}
-          </Typography>
-        </Box>
-        <Box
-          sx={{
-            bgcolor: color,
-            borderRadius: 2,
-            p: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {icon}
-        </Box>
-      </Box>
-    </CardContent>
-  </Card>
-);
+import { MonthlyStats } from '../../types';
+import MetricsCards from '../../components/dashboard/MetricsCards';
+import DoctorsSummaryTable from '../../components/dashboard/DoctorsSummaryTable';
+import MiniCharts from '../../components/dashboard/MiniCharts';
 
 export const AdminDashboard: React.FC = () => {
-  const [stats, setStats] = useState<MonthlyStats | null>(null);
+  const navigate = useNavigate();
+  const [currentStats, setCurrentStats] = useState<MonthlyStats | null>(null);
+  const [previousStats, setPreviousStats] = useState<MonthlyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -72,8 +32,22 @@ export const AdminDashboard: React.FC = () => {
 
   const loadStats = async () => {
     try {
-      const data = await statsApi.getMonthlyStats();
-      setStats(data);
+      // Cargar estadísticas del mes actual y anterior
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+
+      const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousYear = previousDate.getFullYear();
+      const previousMonth = previousDate.getMonth() + 1;
+
+      const [currentData, previousData] = await Promise.all([
+        statsApi.getMonthlyStats(currentYear, currentMonth),
+        statsApi.getMonthlyStats(previousYear, previousMonth),
+      ]);
+
+      setCurrentStats(currentData);
+      setPreviousStats(previousData);
     } catch (err) {
       setError('Error al cargar las estadísticas');
     } finally {
@@ -101,77 +75,48 @@ export const AdminDashboard: React.FC = () => {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        Dashboard - {monthNames[(stats?.month || 1) - 1]} {stats?.year}
+        Dashboard - {monthNames[(currentStats?.month || 1) - 1]} {currentStats?.year}
       </Typography>
 
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Total de Turnos"
-            value={stats?.totalShifts || 0}
-            icon={<CalendarIcon sx={{ color: 'white' }} />}
-            color="primary.main"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Turnos Asignados"
-            value={stats?.assignedShifts || 0}
-            icon={<PeopleIcon sx={{ color: 'white' }} />}
-            color="success.main"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Turnos Disponibles"
-            value={stats?.availableShifts || 0}
-            icon={<AvailableIcon sx={{ color: 'white' }} />}
-            color="warning.main"
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard
-            title="Horas Totales"
-            value={stats?.totalHours || 0}
-            icon={<TimeIcon sx={{ color: 'white' }} />}
-            color="secondary.main"
-          />
-        </Grid>
-      </Grid>
+      <MetricsCards stats={currentStats} loading={loading} />
 
-      <Typography variant="h5" gutterBottom>
+      {/* Mini charts for trends */}
+      {currentStats && previousStats && (
+        <MiniCharts
+          currentMonth={{
+            totalShifts: currentStats.totalShifts,
+            assignedShifts: currentStats.assignedShifts,
+            totalHours: currentStats.totalHours,
+          }}
+          previousMonth={{
+            totalShifts: previousStats.totalShifts,
+            assignedShifts: previousStats.assignedShifts,
+            totalHours: previousStats.totalHours,
+          }}
+        />
+      )}
+
+      <Paper sx={{ mt: 4, p: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Accesos Rápidos
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <Box display="flex" gap={2} flexWrap="wrap">
+          <Button
+            variant="contained"
+            startIcon={<BarChartIcon />}
+            endIcon={<NavigateNextIcon />}
+            onClick={() => navigate('/admin/stats')}
+          >
+            Ver Análisis Detallado
+          </Button>
+        </Box>
+      </Paper>
+
+      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
         Horas por Médico
       </Typography>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Médico</TableCell>
-              <TableCell>Especialidad</TableCell>
-              <TableCell align="center">Total Turnos</TableCell>
-              <TableCell align="center">Turnos Fijos</TableCell>
-              <TableCell align="center">Turnos Rotativos</TableCell>
-              <TableCell align="center">Total Horas</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {stats?.doctorsSummary.map((doctor: DoctorHoursSummary) => (
-              <TableRow key={doctor.doctorId}>
-                <TableCell>{doctor.doctorName}</TableCell>
-                <TableCell>
-                  <Chip label={doctor.specialty || 'N/A'} size="small" />
-                </TableCell>
-                <TableCell align="center">{doctor.shiftCount}</TableCell>
-                <TableCell align="center">{doctor.fixedShifts}</TableCell>
-                <TableCell align="center">{doctor.rotatingShifts}</TableCell>
-                <TableCell align="center">
-                  <Typography fontWeight="bold">{doctor.totalHours}h</Typography>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DoctorsSummaryTable stats={currentStats} />
     </Box>
   );
 };

@@ -5,32 +5,32 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Card,
-  CardContent,
+  Breadcrumbs,
+  Link,
   Grid,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
+  IconButton,
 } from '@mui/material';
 import {
   ChevronLeft as PrevIcon,
   ChevronRight as NextIcon,
+  Home as HomeIcon,
+  BarChart as BarChartIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { statsApi } from '../../api/stats';
 import { userApi } from '../../api/users';
 import { MonthlyStats, DoctorOption } from '../../types';
 import { format, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import MetricsCards from '../../components/dashboard/MetricsCards';
+import DoctorsSummaryTable from '../../components/dashboard/DoctorsSummaryTable';
 
 export const Statistics: React.FC = () => {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [doctors, setDoctors] = useState<DoctorOption[]>([]);
@@ -91,6 +91,22 @@ export const Statistics: React.FC = () => {
 
   return (
     <Box>
+      {/* Breadcrumb */}
+      <Breadcrumbs sx={{ mb: 2 }}>
+        <Link
+          color="inherit"
+          onClick={() => navigate('/admin/dashboard')}
+          sx={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+        >
+          <HomeIcon sx={{ mr: 0.5 }} fontSize="inherit" />
+          Dashboard
+        </Link>
+        <Typography color="text.primary" sx={{ display: 'flex', alignItems: 'center' }}>
+          <BarChartIcon sx={{ mr: 0.5 }} fontSize="inherit" />
+          Estadísticas
+        </Typography>
+      </Breadcrumbs>
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Estadísticas</Typography>
         <Box display="flex" alignItems="center" gap={2}>
@@ -129,44 +145,11 @@ export const Statistics: React.FC = () => {
         </Alert>
       )}
 
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>Total Turnos</Typography>
-              <Typography variant="h4">{stats?.totalShifts || 0}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>Asignados</Typography>
-              <Typography variant="h4" color="success.main">{stats?.assignedShifts || 0}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>Disponibles</Typography>
-              <Typography variant="h4" color="warning.main">{stats?.availableShifts || 0}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="text.secondary" gutterBottom>Total Horas</Typography>
-              <Typography variant="h4" color="primary.main">{stats?.totalHours || 0}h</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <MetricsCards stats={stats} loading={loading} />
 
       {/* Doctor detail */}
       {selectedDoctor && doctorStats && (
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: 3, mb: 3, mt: 3 }}>
           <Typography variant="h5" gutterBottom>
             Detalle: {doctorStats.doctor.name}
           </Typography>
@@ -192,40 +175,12 @@ export const Statistics: React.FC = () => {
       )}
 
       {/* All doctors summary */}
-      <Typography variant="h5" gutterBottom>Resumen por Médico</Typography>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Médico</TableCell>
-              <TableCell>Especialidad</TableCell>
-              <TableCell align="center">Turnos</TableCell>
-              <TableCell align="center">Fijos</TableCell>
-              <TableCell align="center">Rotativos</TableCell>
-              <TableCell align="center">Total Horas</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {stats?.doctorsSummary.map((doctor) => (
-              <TableRow
-                key={doctor.doctorId}
-                hover
-                onClick={() => setSelectedDoctor(doctor.doctorId)}
-                sx={{ cursor: 'pointer' }}
-              >
-                <TableCell>{doctor.doctorName}</TableCell>
-                <TableCell>{doctor.specialty || '-'}</TableCell>
-                <TableCell align="center">{doctor.shiftCount}</TableCell>
-                <TableCell align="center">{doctor.fixedShifts}</TableCell>
-                <TableCell align="center">{doctor.rotatingShifts}</TableCell>
-                <TableCell align="center">
-                  <Typography fontWeight="bold">{doctor.totalHours}h</Typography>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>Resumen por Médico</Typography>
+      <DoctorsSummaryTable
+        stats={stats}
+        onDoctorClick={setSelectedDoctor}
+        clickable={true}
+      />
     </Box>
   );
 };
