@@ -66,8 +66,10 @@ export const HolidayManagement: React.FC = () => {
   const handleOpenDialog = (holiday?: Holiday) => {
     if (holiday) {
       setEditingHoliday(holiday);
+      // Extract date part directly from ISO string to avoid timezone issues
+      const [datePart] = holiday.date.split('T');
       setFormData({
-        date: format(parseISO(holiday.date), 'yyyy-MM-dd'),
+        date: datePart,
         name: holiday.name,
         isRecurrent: holiday.isRecurrent,
       });
@@ -168,10 +170,20 @@ export const HolidayManagement: React.FC = () => {
             {holidays.map((holiday) => (
               <TableRow key={holiday.id}>
                 <TableCell>
-                  {format(parseISO(holiday.date), "dd 'de' MMMM", { locale: es })}
+                  {(() => {
+                    // Parse UTC date correctly to avoid timezone shift
+                    const [datePart] = holiday.date.split('T');
+                    const [year, month, day] = datePart.split('-').map(Number);
+                    const holidayDate = new Date(year, month - 1, day);
+                    return format(holidayDate, "dd 'de' MMMM", { locale: es });
+                  })()}
                   {!holiday.isRecurrent && (
                     <Typography variant="caption" display="block" color="text.secondary">
-                      {format(parseISO(holiday.date), 'yyyy')}
+                      {(() => {
+                        const [datePart] = holiday.date.split('T');
+                        const [year] = datePart.split('-').map(Number);
+                        return year;
+                      })()}
                     </Typography>
                   )}
                 </TableCell>

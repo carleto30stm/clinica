@@ -80,14 +80,15 @@ export const create = async (
   try {
     const { date, name, isRecurrent = false } = req.body;
 
-    const holidayDate = new Date(date);
+    // Parse date as UTC midnight to avoid timezone issues
+    const holidayDate = new Date(`${date}T00:00:00.000Z`);
 
     // Check for duplicate holiday on the same date
     const existing = await prisma.holiday.findFirst({
       where: {
         date: {
-          gte: new Date(holidayDate.getFullYear(), holidayDate.getMonth(), holidayDate.getDate()),
-          lt: new Date(holidayDate.getFullYear(), holidayDate.getMonth(), holidayDate.getDate() + 1),
+          gte: new Date(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate()),
+          lt: new Date(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate() + 1),
         },
       },
     });
@@ -133,7 +134,7 @@ export const update = async (
     const holiday = await prisma.holiday.update({
       where: { id },
       data: {
-        ...(date && { date: new Date(date) }),
+        ...(date && { date: new Date(`${date}T00:00:00.000Z`) }),
         ...(name && { name }),
         ...(isRecurrent !== undefined && { isRecurrent }),
       },

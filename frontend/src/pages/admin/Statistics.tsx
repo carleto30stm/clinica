@@ -28,6 +28,9 @@ import { format, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import MetricsCards from '../../components/dashboard/MetricsCards';
 import DoctorsSummaryTable from '../../components/dashboard/DoctorsSummaryTable';
+import StatisticsCharts from '../../components/dashboard/StatisticsCharts';
+import TrendAnalysis from '../../components/dashboard/TrendAnalysis';
+import ExportData from '../../components/dashboard/ExportData';
 
 export const Statistics: React.FC = () => {
   const navigate = useNavigate();
@@ -147,6 +150,10 @@ export const Statistics: React.FC = () => {
 
       <MetricsCards stats={stats} loading={loading} />
 
+      <StatisticsCharts stats={stats} loading={loading} />
+
+      <TrendAnalysis currentStats={stats} />
+
       {/* Doctor detail */}
       {selectedDoctor && doctorStats && (
         <Paper sx={{ p: 3, mb: 3, mt: 3 }}>
@@ -181,6 +188,8 @@ export const Statistics: React.FC = () => {
         onDoctorClick={setSelectedDoctor}
         clickable={true}
       />
+
+      <ExportData stats={stats} />
     </Box>
   );
 };

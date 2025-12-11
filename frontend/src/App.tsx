@@ -30,6 +30,7 @@ import HolidayManagement from './pages/admin/HolidayManagement';
 import MyShifts from './pages/doctor/MyShifts';
 import AvailableShifts from './pages/doctor/AvailableShifts';
 import DoctorCalendar from './pages/doctor/DoctorCalendar';
+import { LoginPage } from './pages/auth/LoginPage';
 
 const AppRoutes: React.FC = () => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
@@ -49,7 +50,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginForm />} />
+      <Route path="/login" element={<LoginPage />} />
       
       {/* Admin Routes */}
       <Route
