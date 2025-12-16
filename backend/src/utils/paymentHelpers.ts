@@ -23,10 +23,19 @@ export const calculateShiftPaymentFromRates = (
   const pad = (n: number) => String(n).padStart(2, '0');
 
   while (current < end) {
+    // Determine the end of the current hour slice (next whole hour) or the shift end
+    const nextHour = new Date(current);
+    nextHour.setMinutes(0, 0, 0);
+    nextHour.setHours(current.getHours() + 1);
+    const sliceEnd = nextHour < end ? nextHour : end;
+
+    const sliceMs = sliceEnd.getTime() - current.getTime();
+    const sliceHours = sliceMs / (1000 * 60 * 60); // fractional hours
+
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
-    // Determine whether this specific hour falls on a holiday or weekend
+    // Determine whether this specific hour slice falls on a holiday or weekend
     let isHourHolidayOrWeekend = false;
 
     if (holidaySet || recurringSet) {
@@ -60,11 +69,13 @@ export const calculateShiftPaymentFromRates = (
       breakdown.push(entry);
     }
 
-    entry.hours += 1;
-    entry.amount = entry.hours * rate;
-    totalAmount += rate;
+    entry.hours += sliceHours;
+    entry.amount = entry.hours * entry.rate;
+    totalAmount += rate * sliceHours;
+    totalAmount = Math.round((totalAmount + Number.EPSILON) * 100) / 100; // keep cents stable
 
-    current.setHours(current.getHours() + 1);
+    // Advance current to slice end
+    current.setTime(sliceEnd.getTime());
   }
 
   return { totalAmount, breakdown };
