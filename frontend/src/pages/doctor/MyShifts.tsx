@@ -21,7 +21,8 @@ import { shiftApi } from '../../api/shifts';
 import { Shift } from '../../types';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useRates, useMyExternalHours } from '../../hooks';
+import { useRates, useMyExternalHours, useHolidays } from '../../hooks';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 import { calculateShiftPayment } from '../../utils/helpers';
 import { MonthFilter } from '../../components/filters/MonthFilter';
 import { isValidMonth } from '../../utils/validators';
@@ -44,6 +45,20 @@ export const MyShifts: React.FC = () => {
   const year = parseInt(monthParts[0]);
   const month = parseInt(monthParts[1]);
   const { data: externalHours = [] } = useMyExternalHours({ month, year });
+
+  // Load holidays for this year so we can compute per-hour holiday rates on the client
+  const { data: holidays = [] } = useHolidays({ year });
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const holidaySet = new Set<string>();
+  const recurringSet = new Set<string>();
+  holidays.forEach((h) => {
+    const d = parseArgentinaDate(h.date);
+    if (h.isRecurrent) {
+      recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    } else {
+      holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    }
+  });
 
   useEffect(() => {
     loadShifts();
@@ -103,7 +118,7 @@ export const MyShifts: React.FC = () => {
 
   const totalPayment = shifts.reduce((acc, shift) => {
     try {
-      const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+      const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc, holidaySet, recurringSet);
       return acc + (res.totalAmount || 0);
     } catch (e) {
       return acc;
@@ -253,7 +268,7 @@ export const MyShifts: React.FC = () => {
                   <TableCell>
                     {(() => {
                       try {
-                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc, holidaySet, recurringSet);
                         const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatCurrency(b.rate)} = ${formatCurrency(b.amount)}`).join(' • ');
                         return (
                           <Box>

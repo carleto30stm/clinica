@@ -52,6 +52,28 @@ export const getMonthlyStats = async (
     // Load rates once for payment calculation
     const rateMap = await buildRateMap();
 
+    // Preload holidays for the month (includes recurrent holidays)
+    const holidays = await prisma.holiday.findMany({
+      where: {
+        OR: [
+          { isRecurrent: true },
+          { date: { gte: startOfMonth, lte: endOfMonth } },
+        ],
+      },
+    });
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const holidaySet = new Set<string>();
+    const recurringSet = new Set<string>();
+    holidays.forEach((h) => {
+      const d = new Date(h.date);
+      if (h.isRecurrent) {
+        recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+      } else {
+        holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+      }
+    });
+
     // Calculate hours and payments per doctor
     const doctorHoursMap = new Map<string, DoctorHoursSummary>();
 
@@ -67,8 +89,9 @@ export const getMonthlyStats = async (
           else existing.rotatingShifts += 1;
 
           try {
+            // Compute payment per-hour using preloaded holiday sets
             const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
             existing.totalPayment = (existing.totalPayment || 0) + totalAmount;
             existing.paymentBreakdown = existing.paymentBreakdown || [];
             breakdown.forEach((b) => {
@@ -97,8 +120,9 @@ export const getMonthlyStats = async (
             hasDiscount: shift.doctor.hasDiscount || false,
           };
           try {
+            // Compute payment per-hour using preloaded holiday sets
             const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
             newEntry.totalPayment = totalAmount;
             newEntry.paymentBreakdown = breakdown.map((b) => ({ periodType: b.type, hours: b.hours, amount: b.amount }));
           } catch (e) {
@@ -346,10 +370,32 @@ export const getDoctorHours = async (
 
     // Compute payments per shift and total payment
     const rateMap = await buildRateMap();
+
+    // Preload holidays for the month (includes recurrent holidays)
+    const holidays = await prisma.holiday.findMany({
+      where: {
+        OR: [
+          { isRecurrent: true },
+          { date: { gte: startOfMonth, lte: endOfMonth } },
+        ],
+      },
+    });
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const holidaySet = new Set<string>();
+    const recurringSet = new Set<string>();
+    holidays.forEach((h) => {
+      const d = new Date(h.date);
+      if (h.isRecurrent) {
+        recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+      } else {
+        holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+      }
+    });
+
     const totalPayment = shifts.reduce((acc, shift) => {
       try {
         const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-        const { totalAmount } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+        const { totalAmount } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
         return acc + totalAmount;
       } catch (e) {
         return acc;

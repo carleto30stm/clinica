@@ -82,6 +82,19 @@ export const DoctorCalendar: React.FC = () => {
     });
   };
 
+  // Build holiday sets for per-hour rate calculation
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const holidaySet = new Set<string>();
+  const recurringSet = new Set<string>();
+  holidays.forEach((h: any) => {
+    const d = parseArgentinaDate(h.date);
+    if (h.isRecurrent) {
+      recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    } else {
+      holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    }
+  });
+
   const getShiftsForDay = (date: Date): Shift[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return shifts.filter((shift) => {
@@ -235,7 +248,7 @@ export const DoctorCalendar: React.FC = () => {
                           <Typography fontWeight="bold">{`${format(new Date(shift.startDateTime), 'HH:mm')} - ${format(new Date(shift.endDateTime), 'HH:mm')}`}</Typography>
                           {(() => {
                             try {
-                              const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                              const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc, holidaySet, recurringSet);
                               const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatCurrency(b.rate)} = ${formatCurrency(b.amount)}`).join(' • ');
                               return (
                                 <Box>

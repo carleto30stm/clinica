@@ -6,7 +6,10 @@ export const calculateShiftPaymentFromRates = (
   rateMap: Map<RatePeriodType, number>,
   startDateTime: Date,
   endDateTime: Date,
-  isHolidayOrWeekend: boolean
+  // Backwards-compatible boolean flag: if holidaySets are not provided, fall back to this
+  isHolidayOrWeekend: boolean,
+  holidaySet?: Set<string>, // e.g. 'YYYY-MM-DD'
+  recurringSet?: Set<string> // e.g. 'MM-DD'
 ): { totalAmount: number; breakdown: Array<{ type: string; hours: number; rate: number; amount: number }> } => {
   const breakdown: Array<{ type: string; hours: number; rate: number; amount: number }> = [];
   let totalAmount = 0;
@@ -17,12 +20,33 @@ export const calculateShiftPaymentFromRates = (
   const current = new Date(startDateTime);
   const end = new Date(endDateTime);
 
+  const pad = (n: number) => String(n).padStart(2, '0');
+
   while (current < end) {
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
+    // Determine whether this specific hour falls on a holiday or weekend
+    let isHourHolidayOrWeekend = false;
+
+    if (holidaySet || recurringSet) {
+      const y = current.getFullYear();
+      const m = pad(current.getMonth() + 1);
+      const d = pad(current.getDate());
+      const dateKey = `${y}-${m}-${d}`;
+      const monthDayKey = `${m}-${d}`;
+
+      const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+      const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+      const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+      isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+    } else {
+      // Fallback to caller-provided boolean
+      isHourHolidayOrWeekend = isHolidayOrWeekend;
+    }
+
     let periodType: RatePeriodType;
-    if (isHolidayOrWeekend) {
+    if (isHourHolidayOrWeekend) {
       periodType = isDay ? 'WEEKEND_HOLIDAY_DAY' : 'WEEKEND_HOLIDAY_NIGHT';
     } else {
       periodType = isDay ? 'WEEKDAY_DAY' : 'WEEKDAY_NIGHT';
@@ -57,7 +81,30 @@ export const calculateShiftPayment = async (
     rateMap.set(r.periodType as RatePeriodType, Number((r.rate as unknown) as number));
   }
 
-  return calculateShiftPaymentFromRates(rateMap, startDateTime, endDateTime, isHolidayOrWeekend);
+  // Load holidays overlapping the shift range plus recurrent ones
+  const holidays = await prisma.holiday.findMany({
+    where: {
+      OR: [
+        { isRecurrent: true },
+        { date: { gte: startDateTime, lte: endDateTime } },
+      ],
+    },
+  });
+
+  const holidaySet = new Set<string>();
+  const recurringSet = new Set<string>();
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  holidays.forEach((h) => {
+    const d = new Date(h.date);
+    if (h.isRecurrent) {
+      recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    } else {
+      holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    }
+  });
+
+  return calculateShiftPaymentFromRates(rateMap, startDateTime, endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
 };
 
 export const buildRateMap = async (): Promise<Map<RatePeriodType, number>> => {

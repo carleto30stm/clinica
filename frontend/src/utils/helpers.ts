@@ -125,7 +125,9 @@ export const calculateShiftPayment = (
   startIso: string,
   endIso: string,
   dayCategory: 'WEEKDAY' | 'WEEKEND' | 'HOLIDAY',
-  hourlyRates: { periodType: string; rate: number }[]
+  hourlyRates: { periodType: string; rate: number }[],
+  holidaySet?: Set<string>,
+  recurringSet?: Set<string>
 ) => {
   const start = new Date(startIso);
   const end = new Date(endIso);
@@ -141,12 +143,33 @@ export const calculateShiftPayment = (
   const breakdown: Array<{ type: string; hours: number; rate: number; amount: number }> = [];
 
   const current = new Date(start);
+  const pad = (n: number) => String(n).padStart(2, '0');
+
   while (current < end) {
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
+    // Determine whether this specific hour falls on a holiday or weekend
+    let isHourHolidayOrWeekend = false;
+
+    if (holidaySet || recurringSet) {
+      const y = current.getFullYear();
+      const m = pad(current.getMonth() + 1);
+      const d = pad(current.getDate());
+      const dateKey = `${y}-${m}-${d}`; // YYYY-MM-DD
+      const monthDayKey = `${m}-${d}`; // MM-DD
+
+      const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+      const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+      const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+      isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+    } else {
+      // Fallback to caller-provided dayCategory
+      isHourHolidayOrWeekend = dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY';
+    }
+
     let periodType = 'WEEKDAY_DAY';
-    if (dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY') {
+    if (isHourHolidayOrWeekend) {
       periodType = isDay ? 'WEEKEND_HOLIDAY_DAY' : 'WEEKEND_HOLIDAY_NIGHT';
     } else {
       periodType = isDay ? 'WEEKDAY_DAY' : 'WEEKDAY_NIGHT';

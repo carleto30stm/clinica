@@ -20,7 +20,8 @@ import {
   Snackbar,
 } from '@mui/material';
 import { EventAvailable as AssignIcon, Warning as WarningIcon, People as PeopleIcon } from '@mui/icons-material';
-import { useAvailableShifts, useSelfAssignShift, useRates } from '../../hooks';
+import { useAvailableShifts, useSelfAssignShift, useRates, useHolidays } from '../../hooks';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 import { Shift, DayCategory } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -51,6 +52,20 @@ export const AvailableShifts: React.FC = () => {
   const selfAssignMutation = useSelfAssignShift();
   const { data: rates } = useRates();
   const ratesForCalc = rates || [];
+
+  // Load holidays to compute per-hour holiday rates
+  const { data: holidays = [] } = useHolidays();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const holidaySet = new Set<string>();
+  const recurringSet = new Set<string>();
+  holidays.forEach((h) => {
+    const d = parseArgentinaDate(h.date);
+    if (h.isRecurrent) {
+      recurringSet.add(`${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    } else {
+      holidaySet.add(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`);
+    }
+  });
   
   const [error, setError] = useState(queryError ? 'Error al cargar los turnos disponibles' : '');
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
@@ -138,7 +153,7 @@ export const AvailableShifts: React.FC = () => {
                   <TableCell>
                     {(() => {
                       try {
-                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc, holidaySet, recurringSet);
                         const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatCurrency(b.rate)} = ${formatCurrency(b.amount)}`).join(' • ');
                         return (
                           <Box>
@@ -226,6 +241,17 @@ export const AvailableShifts: React.FC = () => {
                     <strong>Notas:</strong> {selectedShift.notes}
                   </Typography>
                 )}
+                {/* Show rate breakdown for the selected shift */}
+                <Box mt={1}>
+                  {(() => {
+                    try {
+                      const res = calculateShiftPayment(selectedShift.startDateTime, selectedShift.endDateTime, selectedShift.dayCategory, ratesForCalc, holidaySet, recurringSet);
+                      return <Typography variant="caption">{`${Math.round(res.totalHours)}h — ${formatCurrency(res.totalAmount)}`}</Typography>;
+                    } catch (e) {
+                      return null;
+                    }
+                  })()}
+                </Box>
               </Paper>
             </Box>
           )}
