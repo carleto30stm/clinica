@@ -10,7 +10,19 @@ const router = Router();
 router.post(
   '/login',
   [
-    body('email').isEmail().withMessage('Email inválido'),
+    body('email')
+      .notEmpty()
+      .withMessage('Email o usuario requerido')
+      .bail()
+      .custom((val) => {
+        // If user included an @, validate as email
+        if (typeof val === 'string' && val.includes('@')) {
+          // use a basic regex for email validation or rely on isEmail
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(val)) throw new Error('Email inválido');
+        }
+        return true;
+      }),
     body('password').notEmpty().withMessage('Contraseña requerida'),
   ],
   validate,

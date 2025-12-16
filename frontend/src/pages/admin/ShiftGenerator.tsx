@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { ConfirmModal } from '../../components/modal/ConfirmModal';
 import { shiftApi } from '../../api/shifts';
-import { holidayApi } from '../../api/holidays';
+import { useHolidays } from '../../hooks/useHolidays';
 import { Holiday, CreateShiftData } from '../../types';
 import { 
   format, 
@@ -47,17 +47,20 @@ interface ShiftPreview {
   dayName: string;
   isWeekend: boolean;
   isHoliday: boolean;
+  holidayId?: string;
   holidayName?: string;
   type: 'FIXED' | 'ROTATING';
   selfAssignable: boolean;
 }
 
 export const ShiftGenerator: React.FC = () => {
-  // loading is not used (holidays load in background), keep for future use if needed
+  // Usar React Query para sincronización automática de feriados
+  const { data: holidaysData = [] } = useHolidays();
+  const holidays = useMemo(() => holidaysData, [holidaysData]);
+  
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
 
   // Form state
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -83,21 +86,8 @@ export const ShiftGenerator: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
-    loadHolidays();
-  }, []);
-
-  useEffect(() => {
     generatePreview();
   }, [selectedMonth, includeWeekdays, includeWeekends, includeHolidays, holidays]);
-
-  const loadHolidays = async () => {
-    try {
-      const data = await holidayApi.getAll();
-      setHolidays(data);
-    } catch (err) {
-      console.error('Error loading holidays:', err);
-    }
-  };
 
   const isHolidayDate = (date: Date): Holiday | undefined => {
     return holidays.find(holiday => {
@@ -143,6 +133,7 @@ export const ShiftGenerator: React.FC = () => {
           dayName: format(day, 'EEEE', { locale: es }),
           isWeekend,
           isHoliday,
+          holidayId: holiday?.id,
           holidayName: holiday?.name,
           type: isRotating ? 'ROTATING' : 'FIXED',
           selfAssignable: isRotating,
@@ -181,10 +172,14 @@ export const ShiftGenerator: React.FC = () => {
           startDateTime: startDateTime.toISOString(),
           endDateTime: endDateTime.toISOString(),
           type: shift.type,
+          // Ensure backend receives explicit dayCategory so holidays are stored correctly
+          dayCategory: shift.isHoliday ? 'HOLIDAY' : (shift.isWeekend ? 'WEEKEND' : 'WEEKDAY'),
           selfAssignable: shift.selfAssignable,
           requiredDoctors: shift.selfAssignable ? requiredDoctors : 1,
           doctorId: null, // Sin médico asignado
           notes: shift.holidayName ? `Feriado: ${shift.holidayName}` : undefined,
+          // Include holidayId for traceability (backend will ignore it in strict typing but it's useful)
+          ...(shift.holidayId ? { holidayId: shift.holidayId } : {}),
         };
       });
 

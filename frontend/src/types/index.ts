@@ -1,7 +1,8 @@
 // User types
 export interface User {
   id: string;
-  email: string;
+  email?: string | null;
+  username?: string | null;
   name: string;
   role: 'ADMIN' | 'DOCTOR';
   specialty?: string | null;
@@ -106,6 +107,7 @@ export interface Holiday {
   date: string;
   name: string;
   isRecurrent: boolean;
+  requiredDoctors: number;  // Cantidad de médicos requeridos (0 = no mostrar en turnos disponibles)
   createdAt: string;
   updatedAt: string;
 }
@@ -114,6 +116,7 @@ export interface CreateHolidayData {
   date: string;
   name: string;
   isRecurrent?: boolean;
+  requiredDoctors?: number;
 }
 
 export interface UpdateHolidayData extends Partial<CreateHolidayData> {}
@@ -132,6 +135,8 @@ export interface DoctorHoursSummary {
   hasDiscount?: boolean;
   discountAmount?: number;
   finalPayment?: number;
+  externalHours?: number;
+  externalPayment?: number;
 }
 
 export interface MonthlyStats {
@@ -205,4 +210,36 @@ export interface CreateDiscountData {
 export interface UpdateDiscountData {
   amount?: number;
   isActive?: boolean;
+}
+
+// External Hours types (consultorio externo)
+export interface ExternalHours {
+  id: string;
+  doctorId: string;
+  doctor?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  hours: number;
+  rate: number;
+  description: string | null;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateExternalHoursData {
+  doctorId: string;
+  hours: number;
+  rate: number;
+  description?: string;
+  date: string;
+}
+
+export interface UpdateExternalHoursData {
+  hours?: number;
+  rate?: number;
+  description?: string;
+  date?: string;
 }

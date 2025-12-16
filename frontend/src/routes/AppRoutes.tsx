@@ -11,6 +11,7 @@ import MonthlyCalendar from '@/pages/admin/MonthlyCalendar';
 import HolidayManagement from '@/pages/admin/HolidayManagement';
 import RateSettings from '@/pages/admin/RateSettings';
 import DiscountManagement from '@/pages/admin/DiscountManagement';
+import ExternalHoursManagement from '@/pages/admin/ExternalHoursManagement';
 import ShiftGenerator from '@/pages/admin/ShiftGenerator';
 import ShiftManagement from '@/pages/admin/ShiftManagement';
 import Statistics from '@/pages/admin/Statistics';
@@ -18,6 +19,7 @@ import WeekendView from '@/pages/admin/WeekendView';
 import AvailableShifts from '@/pages/doctor/AvailableShifts';
 import DoctorCalendar from '@/pages/doctor/DoctorCalendar';
 import MyShifts from '@/pages/doctor/MyShifts';
+import MyExternalHours from '@/pages/doctor/MyExternalHours';
 
 
 
@@ -60,6 +62,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="holidays" element={<HolidayManagement />} />
         <Route path="rates" element={<RateSettings />} />
         <Route path="discounts" element={<DiscountManagement />} />
+        <Route path="external-hours" element={<ExternalHoursManagement />} />
         <Route path="weekends" element={<WeekendView />} />
         <Route path="stats" element={<Statistics />} />
       </Route>
@@ -76,6 +79,7 @@ export const AppRoutes: React.FC = () => {
         <Route index element={<MyShifts />} />
         <Route path="available" element={<AvailableShifts />} />
         <Route path="calendar" element={<DoctorCalendar />} />
+        <Route path="external-hours" element={<MyExternalHours />} />
         <Route path="general-calendar" element={<MonthlyCalendar readOnly />} />
       </Route>
 

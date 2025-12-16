@@ -33,8 +33,13 @@ export const login = async (
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+    const identifier = email; // 'email' field can contain email or username
+    const whereClause = isNaN(Number(identifier))
+      ? { OR: [{ email: identifier.toLowerCase() }, { username: identifier.toLowerCase() }] }
+      : { OR: [{ email: identifier.toLowerCase() }, { username: identifier.toLowerCase() }] };
+
+    const user = await prisma.user.findFirst({
+      where: whereClause,
     });
 
     if (!user) {

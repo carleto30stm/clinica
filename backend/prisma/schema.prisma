@@ -48,7 +48,8 @@ enum AuditAction {
 
 model User {
   id           String     @id @default(uuid())
-  email        String     @unique
+  email        String?    @unique
+  username     String?    @unique
   passwordHash String
   name         String
   role         Role       @default(DOCTOR)
@@ -65,6 +66,7 @@ model User {
   createdShifts Shift[]   @relation("CreatedByAdmin")
   auditLogs    AuditLog[]
   refreshTokens RefreshToken[]
+  externalHours ExternalHours[] @relation("ExternalHours")
 
   @@map("users")
 }
@@ -124,12 +126,13 @@ model ShiftDoctor {
 }
 
 model Holiday {
-  id          String   @id @default(uuid())
-  date        DateTime @db.Date
-  name        String
-  isRecurrent Boolean  @default(false)  // Si true, se repite cada año (ej: Navidad)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  date            DateTime @db.Date
+  name            String
+  isRecurrent     Boolean  @default(false)  // Si true, se repite cada año (ej: Navidad)
+  requiredDoctors Int      @default(0)      // Cantidad de médicos requeridos (0 = no mostrar en turnos disponibles)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   shifts      Shift[]
 
@@ -202,4 +205,21 @@ model Discount {
   updatedAt DateTime @updatedAt
 
   @@map("discounts")
+}
+
+// Registro de horas de consultorios externos (fuera de la app)
+model ExternalHours {
+  id          String   @id @default(uuid())
+  doctorId    String
+  doctor      User     @relation("ExternalHours", fields: [doctorId], references: [id], onDelete: Cascade)
+  hours       Decimal  @db.Decimal(10, 2)  // Cantidad de horas trabajadas
+  rate        Decimal  @db.Decimal(10, 2)  // Tarifa por hora aplicada
+  description String?                      // Descripción opcional (ej: "Consultorio Cardiología")
+  date        DateTime                     // Fecha del servicio
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([doctorId])
+  @@index([date])
+  @@map("external_hours")
 }

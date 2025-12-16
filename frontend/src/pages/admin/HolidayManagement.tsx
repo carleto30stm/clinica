@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -27,14 +27,17 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { holidayApi } from '../../api/holidays';
+import { useHolidays, useCreateHoliday, useUpdateHoliday, useDeleteHoliday } from '../../hooks/useHolidays';
 import { Holiday, CreateHolidayData } from '../../types';
-// format and locale not used in this file
 import { parseArgentinaDate, formatArgentinaDate } from '../../utils/dateHelpers';
 
 export const HolidayManagement: React.FC = () => {
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [loading, setLoading] = useState(true);
+  // React Query hooks para sincronización automática
+  const { data: holidaysData, isLoading, error: queryError } = useHolidays();
+  const createHoliday = useCreateHoliday();
+  const updateHoliday = useUpdateHoliday();
+  const deleteHoliday = useDeleteHoliday();
+
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -46,34 +49,27 @@ export const HolidayManagement: React.FC = () => {
     date: '',
     name: '',
     isRecurrent: false,
+    requiredDoctors: 0,
   });
 
-  useEffect(() => {
-    loadHolidays();
-  }, []);
-
-  const loadHolidays = async () => {
-    try {
-      const data = await holidayApi.getAll();
-      // Normalize to YYYY-MM-DD to avoid timezone shifts on client
-      const normalized = data.map((h) => ({ ...h, date: formatArgentinaDate(parseArgentinaDate(h.date)) }));
-      setHolidays(normalized);
-    } catch (err) {
-      setError('Error al cargar los feriados');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Normalizar fechas para evitar problemas de timezone
+  const holidays = useMemo(() => {
+    if (!holidaysData) return [];
+    return holidaysData.map((h) => ({
+      ...h,
+      date: formatArgentinaDate(parseArgentinaDate(h.date)),
+    }));
+  }, [holidaysData]);
 
   const handleOpenDialog = (holiday?: Holiday) => {
     if (holiday) {
       setEditingHoliday(holiday);
-      // Use formatArgentinaDate which uses UTC getters for consistency
       const datePart = formatArgentinaDate(parseArgentinaDate(holiday.date));
       setFormData({
         date: datePart,
         name: holiday.name,
         isRecurrent: holiday.isRecurrent,
+        requiredDoctors: holiday.requiredDoctors ?? 0,
       });
     } else {
       setEditingHoliday(null);
@@ -81,6 +77,7 @@ export const HolidayManagement: React.FC = () => {
         date: '',
         name: '',
         isRecurrent: false,
+        requiredDoctors: 0,
       });
     }
     setDialogOpen(true);
@@ -94,14 +91,13 @@ export const HolidayManagement: React.FC = () => {
   const handleSubmit = async () => {
     try {
       if (editingHoliday) {
-        await holidayApi.update(editingHoliday.id, formData);
+        await updateHoliday.mutateAsync({ id: editingHoliday.id, data: formData });
         setSuccess('Feriado actualizado correctamente');
       } else {
-        await holidayApi.create(formData);
+        await createHoliday.mutateAsync(formData);
         setSuccess('Feriado creado correctamente');
       }
       handleCloseDialog();
-      loadHolidays();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al guardar el feriado');
     }
@@ -110,20 +106,29 @@ export const HolidayManagement: React.FC = () => {
   const handleDelete = async () => {
     if (!holidayToDelete) return;
     try {
-      await holidayApi.delete(holidayToDelete.id);
+      await deleteHoliday.mutateAsync(holidayToDelete.id);
       setSuccess('Feriado eliminado correctamente');
       setDeleteDialogOpen(false);
       setHolidayToDelete(null);
-      loadHolidays();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al eliminar el feriado');
     }
   };
 
-  if (loading) {
+  const isMutating = createHoliday.isPending || updateHoliday.isPending || deleteHoliday.isPending;
+
+  if (isLoading) {
     return (
       <Box display="flex" justifyContent="center" p={4}>
         <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <Box p={4}>
+        <Alert severity="error">Error al cargar los feriados</Alert>
       </Box>
     );
   }
@@ -165,6 +170,7 @@ export const HolidayManagement: React.FC = () => {
               <TableCell>Fecha</TableCell>
               <TableCell>Nombre</TableCell>
               <TableCell>Tipo</TableCell>
+              <TableCell align="center">Médicos Req.</TableCell>
               <TableCell align="center">Acciones</TableCell>
             </TableRow>
           </TableHead>
@@ -197,6 +203,17 @@ export const HolidayManagement: React.FC = () => {
                   />
                 </TableCell>
                 <TableCell align="center">
+                  {holiday.requiredDoctors > 0 ? (
+                    <Chip
+                      label={holiday.requiredDoctors}
+                      color="success"
+                      size="small"
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">-</Typography>
+                  )}
+                </TableCell>
+                <TableCell align="center">
                   <IconButton
                     size="small"
                     onClick={() => handleOpenDialog(holiday)}
@@ -219,7 +236,7 @@ export const HolidayManagement: React.FC = () => {
             ))}
             {holidays.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} align="center">
+                <TableCell colSpan={5} align="center">
                   <Typography color="text.secondary" py={4}>
                     No hay feriados configurados
                   </Typography>
@@ -254,6 +271,15 @@ export const HolidayManagement: React.FC = () => {
               required
               placeholder="Ej: Navidad, Día de la Independencia"
             />
+            <TextField
+              label="Cantidad de médicos requeridos"
+              type="number"
+              value={formData.requiredDoctors ?? 0}
+              onChange={(e) => setFormData({ ...formData, requiredDoctors: Math.max(0, parseInt(e.target.value) || 0) })}
+              fullWidth
+              helperText="Si es mayor a 0, el feriado aparecerá en la lista de turnos disponibles para auto-asignación"
+              inputProps={{ min: 0 }}
+            />
             <FormControlLabel
               control={
                 <Switch
@@ -266,19 +292,19 @@ export const HolidayManagement: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
+          <Button onClick={handleCloseDialog} disabled={isMutating}>Cancelar</Button>
           <Button
             onClick={handleSubmit}
             variant="contained"
-            disabled={!formData.date || !formData.name}
+            disabled={!formData.date || !formData.name || isMutating}
           >
-            {editingHoliday ? 'Guardar' : 'Crear'}
+            {isMutating ? 'Guardando...' : editingHoliday ? 'Guardar' : 'Crear'}
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog open={deleteDialogOpen} onClose={() => !isMutating && setDeleteDialogOpen(false)}>
         <DialogTitle>Confirmar Eliminación</DialogTitle>
         <DialogContent>
           <Typography>
@@ -286,9 +312,9 @@ export const HolidayManagement: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Eliminar
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={isMutating}>Cancelar</Button>
+          <Button onClick={handleDelete} color="error" variant="contained" disabled={isMutating}>
+            {isMutating ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </DialogActions>
       </Dialog>

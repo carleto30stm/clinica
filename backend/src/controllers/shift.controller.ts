@@ -748,6 +748,7 @@ export const getMyShifts = async (
 /**
  * Get available shifts (for doctors to self-assign)
  * Only returns ROTATING shifts on weekends/holidays that are selfAssignable
+ * Also includes holidays with requiredDoctors > 0 (even without explicit shift)
  * Filters out shifts that are already full (doctors.length >= requiredDoctors)
  */
 export const getAvailable = async (
@@ -795,6 +796,7 @@ export const getAvailable = async (
           select: {
             id: true,
             name: true,
+            requiredDoctors: true,
           },
         },
       },

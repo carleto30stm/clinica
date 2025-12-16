@@ -6,11 +6,11 @@ import { config } from '../config/constants';
  * @returns Date object in Argentina timezone
  */
 export const parseArgentinaDate = (dateString: string): Date => {
-  // Create a Date object at UTC midnight for the given YYYY-MM-DD
+  // Keep only the date portion if an ISO string was provided
   const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
   const [year, month, day] = dateOnly.split('-').map(Number);
-  // Use Date.UTC so we get midnight UTC consistently
-  return new Date(Date.UTC(year, month - 1, day));
+  // Create a Date at local midnight for that YYYY-MM-DD (avoids UTC shifts)
+  return new Date(year, month - 1, day);
 };
 
 /**
@@ -27,10 +27,10 @@ export const nowInArgentina = (): Date => {
  * @returns Date string in YYYY-MM-DD format
  */
 export const formatArgentinaDate = (date: Date): string => {
-  // Use UTC getters to avoid local timezone shifts when date was stored as UTC midnight
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
+  // Use local getters because dates are stored/handled as local-midnight Argentina dates
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 

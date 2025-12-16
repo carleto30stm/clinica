@@ -14,7 +14,8 @@ interface DoctorsResponse {
 }
 
 export interface CreateUserData {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
   name: string;
   role?: 'ADMIN' | 'DOCTOR';
@@ -24,9 +25,11 @@ export interface CreateUserData {
 
 export interface UpdateUserData {
   name?: string;
+  username?: string;
   specialty?: string;
   phone?: string;
   isActive?: boolean;
+  hasDiscount?: boolean;
 }
 
 export const userApi = {

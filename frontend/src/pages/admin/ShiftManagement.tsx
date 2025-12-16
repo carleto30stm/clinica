@@ -192,6 +192,8 @@ export const ShiftManagement: React.FC = () => {
         ...formData,
         startDateTime: new Date(formData.startDateTime).toISOString(),
         endDateTime: new Date(formData.endDateTime).toISOString(),
+        // Send null for unassigned doctor instead of empty string to satisfy backend validation
+        doctorId: formData.doctorId || null,
       };
 
       if (editingShift) {

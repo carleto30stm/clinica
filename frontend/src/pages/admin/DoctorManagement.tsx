@@ -50,6 +50,7 @@ export const DoctorManagement: React.FC = () => {
   // Form state
   const [formData, setFormData] = useState<CreateUserData>({
     email: '',
+    username: '',
     password: '',
     name: '',
     role: 'DOCTOR',
@@ -76,7 +77,8 @@ export const DoctorManagement: React.FC = () => {
     if (user) {
       setEditingUser(user);
       setFormData({
-        email: user.email,
+        email: user.email || '',
+        username: user.username || '',
         password: '',
         name: user.name,
         role: user.role,
@@ -87,6 +89,7 @@ export const DoctorManagement: React.FC = () => {
       setEditingUser(null);
       setFormData({
         email: '',
+        username: '',
         password: '',
         name: '',
         role: 'DOCTOR',
@@ -107,12 +110,30 @@ export const DoctorManagement: React.FC = () => {
       if (editingUser) {
         const updateData: UpdateUserData = {
           name: formData.name,
+          username: formData.username,
           specialty: formData.specialty,
           phone: formData.phone,
         };
         await userApi.update(editingUser.id, updateData);
       } else {
-        await userApi.create(formData);
+        // Validate that at least email or username is provided
+        if (!formData.email && !formData.username) {
+          setError('Proporcione al menos un correo o un usuario');
+          return;
+        }
+
+        // Sanitize payload: don't send empty strings
+        const createData: CreateUserData = {
+          ...(formData.email ? { email: formData.email } : {}),
+          ...(formData.username ? { username: formData.username } : {}),
+          password: formData.password,
+          name: formData.name,
+          role: formData.role,
+          specialty: formData.specialty || undefined,
+          phone: formData.phone || undefined,
+        };
+
+        await userApi.create(createData);
       }
       handleCloseDialog();
       loadUsers();
@@ -203,6 +224,7 @@ export const DoctorManagement: React.FC = () => {
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
+              <TableCell>Usuario</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Rol</TableCell>
               <TableCell>Especialidad</TableCell>
@@ -215,6 +237,7 @@ export const DoctorManagement: React.FC = () => {
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{user.name}</TableCell>
+                <TableCell>{user.username || '-'}</TableCell>
                 <TableCell>{user.email}
                     <Typography variant="body2" color="text.secondary">{user.phone}</Typography>
                 </TableCell>
@@ -280,13 +303,23 @@ export const DoctorManagement: React.FC = () => {
             />
             <TextField
               fullWidth
-              label="Correo electrónico"
+              label="Correo Electrónico (opcional)"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               margin="normal"
-              required
               disabled={!!editingUser}
+            />
+
+            <TextField
+              fullWidth
+              label="Usuario (username) (opcional)"
+              type="text"
+              value={formData.username}
+              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              margin="normal"
+              disabled={!!editingUser}
+              helperText="Al menos correo o usuario deben completarse al crear"
             />
             {!editingUser && (
               <TextField
@@ -299,6 +332,7 @@ export const DoctorManagement: React.FC = () => {
                 required
               />
             )}
+            <Typography variant="caption" color="text.secondary">Al crear un usuario, al menos <strong>Correo</strong> o <strong>Usuario</strong> deben completarse.</Typography>
             <FormControl fullWidth margin="normal">
               <InputLabel>Rol</InputLabel>
               <Select

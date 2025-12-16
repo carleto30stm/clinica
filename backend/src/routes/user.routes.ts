@@ -23,12 +23,20 @@ router.post(
   '/',
   requireAdmin,
   [
-    body('email').isEmail().withMessage('Email inválido'),
+    // email or username optional individually, but at least one required (validated below)
+    body('email').optional().isEmail().withMessage('Email inválido'),
+    body('username').optional().isAlphanumeric().withMessage('Usuario inválido'),
     body('password')
       .isLength({ min: 6 })
       .withMessage('La contraseña debe tener al menos 6 caracteres'),
     body('name').notEmpty().withMessage('Nombre requerido'),
     body('role').optional().isIn(['ADMIN', 'DOCTOR']).withMessage('Rol inválido'),
+    body().custom((_, { req }) => {
+      if (!req.body.email && !req.body.username) {
+        throw new Error('Se requiere email o username');
+      }
+      return true;
+    }),
   ],
   validate,
   userController.create

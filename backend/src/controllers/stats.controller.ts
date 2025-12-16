@@ -109,6 +109,60 @@ export const getMonthlyStats = async (
       }
     });
 
+    // Get external hours for the same period
+    const externalHours = await prisma.externalHours.findMany({
+      where: {
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            hasDiscount: true,
+          },
+        },
+      },
+    });
+
+    // Add external hours to doctor summaries
+    externalHours.forEach((ext) => {
+      const hours = Number(ext.hours);
+      const rate = Number(ext.rate);
+      const amount = hours * rate;
+      
+      let existing = doctorHoursMap.get(ext.doctorId);
+      if (!existing) {
+        // Create new entry if doctor doesn't have shifts
+        existing = {
+          doctorId: ext.doctorId,
+          doctorName: ext.doctor.name,
+          specialty: ext.doctor.specialty,
+          totalHours: 0,
+          shiftCount: 0,
+          fixedShifts: 0,
+          rotatingShifts: 0,
+          totalPayment: 0,
+          paymentBreakdown: [],
+          hasDiscount: ext.doctor.hasDiscount || false,
+          externalHours: 0,
+          externalPayment: 0,
+        };
+        doctorHoursMap.set(ext.doctorId, existing);
+      }
+      
+      // Add external hours data
+      if (!existing.externalHours) existing.externalHours = 0;
+      if (!existing.externalPayment) existing.externalPayment = 0;
+      existing.externalHours += hours;
+      existing.externalPayment += amount;
+      existing.totalPayment = (existing.totalPayment || 0) + amount;
+    });
+
     // Get active discount
     const activeDiscount = await prisma.discount.findFirst({
       where: { isActive: true },

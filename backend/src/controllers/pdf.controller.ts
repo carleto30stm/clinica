@@ -251,7 +251,7 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
     const nightRate = rateMap.get('WEEKDAY_NIGHT') || 0;
 
     // Calculate hours and payment per doctor (reuse logic from stats.controller)
-    const doctorMap = new Map<string, { name: string; specialty: string; weekdayHours: number; weekendHours: number; nightHours: number; hasDiscount: boolean }>();
+    const doctorMap = new Map<string, { name: string; weekdayHours: number; weekendHours: number; nightHours: number; externalHours: number; externalPayment: number; hasDiscount: boolean }>();
 
     for (const s of shifts) {
       const sStart = new Date(s.startDateTime);
@@ -263,7 +263,7 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 
       for (const doc of doctors) {
         if (!doctorMap.has(doc.id)) {
-          doctorMap.set(doc.id, { name: doc.name, specialty: doc.specialty, weekdayHours: 0, weekendHours: 0, nightHours: 0, hasDiscount: doc.hasDiscount || false });
+          doctorMap.set(doc.id, { name: doc.name, weekdayHours: 0, weekendHours: 0, nightHours: 0, externalHours: 0, externalPayment: 0, hasDiscount: doc.hasDiscount || false });
         }
         const entry = doctorMap.get(doc.id)!;
 
@@ -292,6 +292,37 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
       }
     }
 
+    // Get external hours for the same period
+    const externalHours = await prisma.externalHours.findMany({
+      where: {
+        date: { gte: start, lte: end },
+      },
+      include: {
+        doctor: { select: { id: true, name: true, hasDiscount: true } },
+      },
+    });
+
+    // Add external hours to doctor map
+    for (const ext of externalHours) {
+      const hours = Number(ext.hours);
+      const rate = Number(ext.rate);
+      
+      if (!doctorMap.has(ext.doctorId)) {
+        doctorMap.set(ext.doctorId, {
+          name: ext.doctor.name,
+          weekdayHours: 0,
+          weekendHours: 0,
+          nightHours: 0,
+          externalHours: 0,
+          externalPayment: 0,
+          hasDiscount: ext.doctor.hasDiscount || false,
+        });
+      }
+      const entry = doctorMap.get(ext.doctorId)!;
+      entry.externalHours += hours;
+      entry.externalPayment += hours * rate;
+    }
+
     // Get active discount
     const activeDiscount = await prisma.discount.findFirst({
       where: { isActive: true },
@@ -304,7 +335,8 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
       const weekdayPay = data.weekdayHours * weekdayRate;
       const weekendPay = data.weekendHours * weekendRate;
       const nightPay = data.nightHours * nightRate;
-      const totalPayment = weekdayPay + weekendPay + nightPay;
+      const shiftsPayment = weekdayPay + weekendPay + nightPay;
+      const totalPayment = shiftsPayment + data.externalPayment;
       const finalPayment = data.hasDiscount && discountAmount > 0 
         ? Math.max(0, totalPayment - discountAmount) 
         : totalPayment;
@@ -334,20 +366,20 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 
     // Table headers
     const tableTop = pdf.y;
-    const colWidths = { name: 120, specialty: 80, weekday: 45, weekend: 45, night: 45, total: 65, discount: 55, final: 65 };
+    const colWidths = { name: 130, weekday: 40, weekend: 40, night: 40, external: 40, total: 60, discount: 50, final: 60 };
     let x = pdf.page.margins.left;
 
     pdf.fontSize(9).font('Helvetica-Bold');
     pdf.text('Médico', x, tableTop, { width: colWidths.name, align: 'left' });
     x += colWidths.name;
-    pdf.text('Especialidad', x, tableTop, { width: colWidths.specialty, align: 'left' });
-    x += colWidths.specialty;
-    pdf.text('Hrs Sem', x, tableTop, { width: colWidths.weekday, align: 'center' });
+    pdf.text('H.Sem', x, tableTop, { width: colWidths.weekday, align: 'center' });
     x += colWidths.weekday;
-    pdf.text('Hrs FS', x, tableTop, { width: colWidths.weekend, align: 'center' });
+    pdf.text('H.FS', x, tableTop, { width: colWidths.weekend, align: 'center' });
     x += colWidths.weekend;
-    pdf.text('Hrs Noc', x, tableTop, { width: colWidths.night, align: 'center' });
+    pdf.text('H.Noc', x, tableTop, { width: colWidths.night, align: 'center' });
     x += colWidths.night;
+    pdf.text('H.Ext', x, tableTop, { width: colWidths.external, align: 'center' });
+    x += colWidths.external;
     pdf.text('Bruto', x, tableTop, { width: colWidths.total, align: 'right' });
     x += colWidths.total;
     pdf.text('Desc.', x, tableTop, { width: colWidths.discount, align: 'right' });
@@ -366,14 +398,14 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 
       pdf.text(doc.name, x, rowTop, { width: colWidths.name, align: 'left' });
       x += colWidths.name;
-      pdf.text(doc.specialty, x, rowTop, { width: colWidths.specialty, align: 'left' });
-      x += colWidths.specialty;
       pdf.text(doc.weekdayHours.toFixed(1), x, rowTop, { width: colWidths.weekday, align: 'center' });
       x += colWidths.weekday;
       pdf.text(doc.weekendHours.toFixed(1), x, rowTop, { width: colWidths.weekend, align: 'center' });
       x += colWidths.weekend;
       pdf.text(doc.nightHours.toFixed(1), x, rowTop, { width: colWidths.night, align: 'center' });
       x += colWidths.night;
+      pdf.text(doc.externalHours.toFixed(1), x, rowTop, { width: colWidths.external, align: 'center' });
+      x += colWidths.external;
       pdf.text(`$${doc.totalPayment.toFixed(2)}`, x, rowTop, { width: colWidths.total, align: 'right' });
       x += colWidths.total;
       pdf.text(doc.discountAmount > 0 ? `-$${doc.discountAmount.toFixed(2)}` : '-', x, rowTop, { width: colWidths.discount, align: 'right' });
@@ -391,6 +423,7 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 const totalWeekday = doctorsList.reduce((sum, d) => sum + d.weekdayHours, 0);
 const totalWeekend = doctorsList.reduce((sum, d) => sum + d.weekendHours, 0);
 const totalNight = doctorsList.reduce((sum, d) => sum + d.nightHours, 0);
+const totalExternal = doctorsList.reduce((sum, d) => sum + d.externalHours, 0);
 const totalBruto = doctorsList.reduce((sum, d) => sum + d.totalPayment, 0);
 const totalDiscounts = doctorsList.reduce((sum, d) => sum + d.discountAmount, 0);
 const totalNeto = doctorsList.reduce((sum, d) => sum + d.finalPayment, 0);
@@ -412,11 +445,11 @@ x = pdf.page.margins.left;
 pdf.fontSize(9).font('Helvetica-Bold');
 
 pdf.text('TOTALES:', x, totalsY, {
-  width: colWidths.name + colWidths.specialty,
+  width: colWidths.name,
   align: 'left',
   height: rowHeight,
 });
-x += colWidths.name + colWidths.specialty;
+x += colWidths.name;
 
 pdf.text(totalWeekday.toFixed(1), x, totalsY, {
   width: colWidths.weekday,
@@ -438,6 +471,13 @@ pdf.text(totalNight.toFixed(1), x, totalsY, {
   height: rowHeight,
 });
 x += colWidths.night;
+
+pdf.text(totalExternal.toFixed(1), x, totalsY, {
+  width: colWidths.external,
+  align: 'center',
+  height: rowHeight,
+});
+x += colWidths.external;
 
 pdf.text(`$${totalBruto.toFixed(2)}`, x, totalsY, {
   width: colWidths.total,

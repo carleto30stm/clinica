@@ -27,7 +27,6 @@ import {
   People as PeopleIcon,
   CalendarMonth as CalendarIcon,
   Assignment as AssignmentIcon,
-  BarChart as StatsIcon,
   Weekend as WeekendIcon,
   EventAvailable as AvailableIcon,
   Logout as LogoutIcon,
@@ -36,6 +35,7 @@ import {
   AutoAwesome as GenerateIcon,
   AttachMoney as RatesIcon,
   Discount as DiscountIcon,
+  Work as WorkIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -52,12 +52,16 @@ interface NavItem {
 
 const adminNavItems: NavItem[] = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin' },
-  { text: 'Gestión de Médicos', icon: <PeopleIcon />, path: '/admin/doctors' },
   { text: 'Calendario Mensual', icon: <CalendarIcon />, path: '/admin/calendar' },
-  // 'Turnos' group is rendered below as a collapsible section
+  // 'Turnos' and 'Médicos' groups are rendered below as collapsible sections
+];
+
+const adminDoctGroup: NavItem[] = [
+  { text: 'Gestión de Médicos', icon: <PeopleIcon />, path: '/admin/doctors' },
   { text: 'Tarifas por Hora', icon: <RatesIcon />, path: '/admin/rates' },
   { text: 'Descuentos', icon: <DiscountIcon />, path: '/admin/discounts' },
-];
+  { text: 'Horas Externas', icon: <WorkIcon />, path: '/admin/external-hours' },
+]
 
 const adminTurnosGroup: NavItem[] = [
   { text: 'Gestión de Turnos', icon: <AssignmentIcon />, path: '/admin/shifts' },
@@ -70,6 +74,7 @@ const doctorNavItems: NavItem[] = [
   { text: 'Mis Turnos', icon: <CalendarIcon />, path: '/doctor' },
   { text: 'Turnos Disponibles', icon: <AvailableIcon />, path: '/doctor/available' },
   { text: 'Mi Calendario', icon: <CalendarIcon />, path: '/doctor/calendar' },
+  { text: 'Mis Horas Externas', icon: <WorkIcon />, path: '/doctor/external-hours' },
   { text: 'Calendario General', icon: <PeopleIcon />, path: '/doctor/general-calendar' },
 ];
 
@@ -83,9 +88,11 @@ export const MainLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [turnosOpen, setTurnosOpen] = useState(true);
+  const [doctOpen, setDoctOpen] = useState(true);
 
   const navItems = user?.role === 'ADMIN' ? adminNavItems : doctorNavItems;
   const turnosItems = user?.role === 'ADMIN' ? adminTurnosGroup : [];
+  const doctItems = user?.role === 'ADMIN' ? adminDoctGroup : [];
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -115,6 +122,8 @@ export const MainLayout: React.FC = () => {
   const getActiveTitle = () => {
     const active = navItems.find((item) => location.pathname.startsWith(item.path));
     if (active) return active.text;
+    const activeSubDoct = doctItems.find((item) => location.pathname.startsWith(item.path));
+    if (activeSubDoct) return activeSubDoct.text;
     const activeSub = turnosItems.find((item) => location.pathname.startsWith(item.path));
     if (activeSub) return activeSub.text;
     return 'Sistema de Turnos';
@@ -140,6 +149,34 @@ export const MainLayout: React.FC = () => {
             </ListItemButton>
           </ListItem>
         ))}
+        {doctItems.length > 0 && (
+          <>
+            <ListItem disablePadding>
+              <ListItemButton onClick={() => setDoctOpen(!doctOpen)}>
+                <ListItemIcon>
+                  <PeopleIcon />
+                </ListItemIcon>
+                <ListItemText primary="Médicos" />
+                {doctOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </ListItemButton>
+            </ListItem>
+            <Collapse in={doctOpen} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                {doctItems.map((sub) => (
+                  <ListItem key={sub.text} sx={{ pl: 4 }} disablePadding>
+                    <ListItemButton
+                      selected={location.pathname === sub.path}
+                      onClick={() => handleNavClick(sub.path)}
+                    >
+                      <ListItemIcon>{sub.icon}</ListItemIcon>
+                      <ListItemText primary={sub.text} />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </Collapse>
+          </>
+        )}
         {turnosItems.length > 0 && (
           <>
             <ListItem disablePadding>
@@ -168,6 +205,7 @@ export const MainLayout: React.FC = () => {
             </Collapse>
           </>
         )}
+
       </List>
     </Box>
   );

@@ -143,16 +143,14 @@ export const parseCurrencyInput = (value: string): number | null => {
   // Remove currency symbol and spaces
   let cleaned = value.replace(/[$\s]/g, '');
   
-  // Replace comma with period for decimal
-  cleaned = cleaned.replace(',', '.');
+  // In Argentine format: 
+  // - Period (.) is thousand separator
+  // - Comma (,) is decimal separator
+  // Remove thousand separators (periods)
+  cleaned = cleaned.replace(/\./g, '');
   
-  // Remove thousand separators (periods that are NOT the decimal point)
-  // Keep only the last period (decimal separator)
-  const parts = cleaned.split('.');
-  if (parts.length > 1) {
-    // Last part is decimals, join the rest without periods
-    cleaned = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
-  }
+  // Replace decimal comma with period for parseFloat
+  cleaned = cleaned.replace(',', '.');
   
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? null : parsed;

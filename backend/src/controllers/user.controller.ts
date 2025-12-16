@@ -37,6 +37,7 @@ export const getAll = async (
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
         role: true,
         specialty: true,
@@ -70,6 +71,7 @@ export const getById = async (
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
         role: true,
         specialty: true,
@@ -100,13 +102,19 @@ export const create = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { email, password, name, role = 'DOCTOR', specialty, phone } = req.body;
+    const { email, username, password, name, role = 'DOCTOR', specialty, phone } = req.body;
+
+    if (!email && !username) {
+      res.status(400).json({ error: 'Se requiere email o username' });
+      return;
+    }
 
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
-        email: email.toLowerCase(),
+        email: email ? email.toLowerCase() : undefined,
+        username: username ? username.toLowerCase() : undefined,
         passwordHash,
         name,
         role,
@@ -116,6 +124,7 @@ export const create = async (
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
         role: true,
         specialty: true,
@@ -130,12 +139,19 @@ export const create = async (
       data: {
         action: 'USER_CREATED',
         userId: req.user!.id,
-        details: JSON.stringify({ createdUserId: user.id, email: user.email }),
+        details: JSON.stringify({ createdUserId: user.id, email: user.email, username: user.username }),
       },
     });
 
     res.status(201).json({ user });
   } catch (error) {
+    // Handle unique constraint errors gracefully
+    // Prisma known request error code for unique constraint is P2002
+    if ((error as any)?.code === 'P2002') {
+      res.status(400).json({ error: 'Email o username ya en uso' });
+      return;
+    }
+
     next(error);
   }
 };

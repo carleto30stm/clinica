@@ -33,7 +33,8 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
           <TableCell align="center">Total Turnos</TableCell>
           <TableCell align="center">Turnos Fijos</TableCell>
           <TableCell align="center">Turnos Rotativos</TableCell>
-          <TableCell align="center">Total Horas</TableCell>
+          <TableCell align="center">Horas Turnos</TableCell>
+          <TableCell align="center">H.Ext</TableCell>
           <TableCell align="center">Pago Bruto</TableCell>
           <TableCell align="center">Descuento</TableCell>
           <TableCell align="center">Pago Neto</TableCell>
@@ -62,6 +63,11 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
             <TableCell align="center">{doctor.rotatingShifts}</TableCell>
             <TableCell align="center">
               <Typography fontWeight="bold">{doctor.totalHours}h</Typography>
+            </TableCell>
+            <TableCell align="center">
+              <Typography fontWeight="bold" color={doctor.externalHours ? 'primary' : 'text.secondary'}>
+                {doctor.externalHours ? `${doctor.externalHours}h` : '-'}
+              </Typography>
             </TableCell>
             <TableCell align="center">
               <Typography fontWeight="bold">

@@ -12,7 +12,7 @@ declare global {
 // Auth types
 export interface AuthUser {
   id: string;
-  email: string;
+  email?: string | null;
   name: string;
   role: 'ADMIN' | 'DOCTOR';
   specialty: string | null;
@@ -43,7 +43,8 @@ export interface LoginResponse {
 
 // User types
 export interface CreateUserRequest {
-  email: string;
+  email?: string;
+  username?: string;
   password: string;
   name: string;
   role?: 'ADMIN' | 'DOCTOR';
@@ -101,12 +102,14 @@ export interface CreateHolidayRequest {
   date: string;
   name: string;
   isRecurrent?: boolean;
+  requiredDoctors?: number;
 }
 
 export interface UpdateHolidayRequest {
   date?: string;
   name?: string;
   isRecurrent?: boolean;
+  requiredDoctors?: number;
 }
 
 export interface ShiftWithDoctor extends Shift {
@@ -158,6 +161,8 @@ export interface DoctorHoursSummary {
   hasDiscount?: boolean;
   discountAmount?: number;
   finalPayment?: number;  // totalPayment - discountAmount
+  externalHours?: number;  // Horas de consultorio externo
+  externalPayment?: number;  // Pago por consultorio externo
 }
 
 export interface MonthlyStats {

@@ -67,7 +67,7 @@ export const LoginPage: React.FC = () => {
                 htmlFor="email" 
                 className="block text-sm font-medium text-gray-700 transition-colors group-focus-within:text-blue-600"
               >
-                Correo Electrónico
+                Email o Usuario
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
@@ -75,11 +75,11 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all bg-gray-50 focus:bg-white text-gray-900"
-                  placeholder="ejemplo@correo.com"
+                  placeholder="usuario o ejemplo@correo.com"
                   required
                 />
               </div>
