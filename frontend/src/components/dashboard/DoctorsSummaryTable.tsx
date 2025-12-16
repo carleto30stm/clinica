@@ -11,6 +11,7 @@ import {
   Chip,
 } from '@mui/material';
 import { MonthlyStats, DoctorHoursSummary } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface DoctorsSummaryTableProps {
   stats: MonthlyStats | null;
@@ -33,7 +34,9 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
           <TableCell align="center">Turnos Fijos</TableCell>
           <TableCell align="center">Turnos Rotativos</TableCell>
           <TableCell align="center">Total Horas</TableCell>
-          <TableCell align="center">Pago estimado</TableCell>
+          <TableCell align="center">Pago Bruto</TableCell>
+          <TableCell align="center">Descuento</TableCell>
+          <TableCell align="center">Pago Neto</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
@@ -62,7 +65,19 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
             </TableCell>
             <TableCell align="center">
               <Typography fontWeight="bold">
-                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(doctor.totalPayment || 0)}
+                {formatCurrency(doctor.totalPayment || 0)}
+              </Typography>
+            </TableCell>
+            <TableCell align="center">
+              <Typography color={doctor.hasDiscount ? 'error' : 'text.disabled'}>
+                {doctor.hasDiscount && doctor.discountAmount ? 
+                  `-${formatCurrency(doctor.discountAmount)}` : 
+                  '-'}
+              </Typography>
+            </TableCell>
+            <TableCell align="center">
+              <Typography fontWeight="bold" color="success.main">
+                {formatCurrency(doctor.finalPayment || doctor.totalPayment || 0)}
               </Typography>
             </TableCell>
           </TableRow>

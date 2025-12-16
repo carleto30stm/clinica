@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { useRates, useUpdateRates } from '../../hooks/useRates';
 import { RatePeriodType, UpdateHourlyRateData } from '../../types';
+import { formatCurrencyInput, parseCurrencyInput } from '../../utils/formatters';
 
 interface RateConfig {
   periodType: RatePeriodType;
@@ -101,12 +102,10 @@ export const RateSettings: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const value = e.target.value;
-    // Allow only numbers and decimal point
-    if (value === '' || /^\d*\.?\d*$/.test(value)) {
-      setFormValues((prev) => ({ ...prev, [periodType]: value }));
-      setHasChanges(true);
-      setSuccess('');
-    }
+    const formatted = formatCurrencyInput(value);
+    setFormValues((prev) => ({ ...prev, [periodType]: formatted }));
+    setHasChanges(true);
+    setSuccess('');
   };
 
   const handleEdit = () => {
@@ -134,10 +133,13 @@ export const RateSettings: React.FC = () => {
   };
 
   const handleSave = async () => {
-    const ratesToUpdate: UpdateHourlyRateData[] = RATE_CONFIGS.map((config) => ({
-      periodType: config.periodType,
-      rate: parseFloat(formValues[config.periodType]) || 0,
-    }));
+    const ratesToUpdate: UpdateHourlyRateData[] = RATE_CONFIGS.map((config) => {
+      const parsedRate = parseCurrencyInput(formValues[config.periodType]);
+      return {
+        periodType: config.periodType,
+        rate: parsedRate || 0,
+      };
+    });
 
     try {
       await updateRates.mutateAsync(ratesToUpdate);
@@ -265,13 +267,13 @@ export const RateSettings: React.FC = () => {
                     startAdornment: <InputAdornment position="start">$</InputAdornment>,
                     endAdornment: <InputAdornment position="end">/hora</InputAdornment>,
                   }}
-                  placeholder="0.00"
+                  placeholder="0,00"
                   helperText={
                     rates?.find((r) => r.periodType === config.periodType)?.updatedAt
                       ? `Última actualización: ${new Date(
                           rates.find((r) => r.periodType === config.periodType)!.updatedAt
-                        ).toLocaleDateString('es-AR')}`
-                      : ''
+                        ).toLocaleDateString('es-AR')}. Use punto (.) para miles, coma (,) para decimales`
+                      : 'Use punto (.) para miles, coma (,) para decimales. Ejemplo: 1.500,00'
                   }
                   disabled={!isEditing}
                 />

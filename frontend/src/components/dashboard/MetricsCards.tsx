@@ -14,6 +14,7 @@ import {
   AccessTime as TimeIcon,
 } from '@mui/icons-material';
 import { MonthlyStats } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface StatCardProps {
   title: string;
@@ -102,7 +103,7 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({ stats, loading = fal
     <Grid item xs={12} sm={6} md={3}>
       <StatCard
         title="Pago Total Estimado"
-        value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(stats?.totalPayment || 0)}
+        value={formatCurrency(stats?.totalPayment)}
         icon={<TimeIcon sx={{ color: 'white' }} />}
         color="info.main"
         loading={loading}

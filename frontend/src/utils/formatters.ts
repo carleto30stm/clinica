@@ -107,6 +107,99 @@ export const formatPhone = (phone: string | null | undefined): string => {
 };
 
 /**
+ * Format currency amount (pesos argentinos) with thousand separator
+ * Example: 600000 -> $600.000
+ */
+export const formatCurrency = (amount: number | null | undefined): string => {
+  if (amount === null || amount === undefined) return '$0';
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
+
+/**
+ * Format number with thousand separator (no currency symbol)
+ * Example: 600000 -> 600.000
+ */
+export const formatNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return '0';
+  return new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+/**
+ * Parse currency string to number (handles Argentine format: 1.234.567,89)
+ * Accepts formats like: "1234567,89", "1.234.567,89", "$1.234.567,89"
+ * Returns the numeric value or null if invalid
+ */
+export const parseCurrencyInput = (value: string): number | null => {
+  if (!value || value.trim() === '') return null;
+  
+  // Remove currency symbol and spaces
+  let cleaned = value.replace(/[$\s]/g, '');
+  
+  // Replace comma with period for decimal
+  cleaned = cleaned.replace(',', '.');
+  
+  // Remove thousand separators (periods that are NOT the decimal point)
+  // Keep only the last period (decimal separator)
+  const parts = cleaned.split('.');
+  if (parts.length > 1) {
+    // Last part is decimals, join the rest without periods
+    cleaned = parts.slice(0, -1).join('') + '.' + parts[parts.length - 1];
+  }
+  
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? null : parsed;
+};
+
+/**
+ * Format currency input in real-time as user types (Argentine format)
+ * Handles thousands separators (.) and decimal comma (,)
+ * Example: "1234567.89" -> "1.234.567,89"
+ */
+export const formatCurrencyInput = (value: string): string => {
+  if (!value) return '';
+  
+  // Remove all non-numeric characters except comma
+  let cleaned = value.replace(/[^\d,]/g, '');
+  
+  // Allow only one comma
+  const commaIndex = cleaned.indexOf(',');
+  if (commaIndex !== -1) {
+    cleaned = cleaned.slice(0, commaIndex + 1) + cleaned.slice(commaIndex + 1).replace(/,/g, '');
+  }
+  
+  // Split integer and decimal parts
+  const parts = cleaned.split(',');
+  let integerPart = parts[0];
+  const decimalPart = parts[1];
+  
+  // Format integer part with thousand separators (periods)
+  if (integerPart) {
+    integerPart = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  
+  // Reconstruct the number
+  return decimalPart !== undefined ? `${integerPart},${decimalPart}` : integerPart;
+};
+
+/**
+ * Handle currency input change for controlled components
+ * Returns formatted string for display
+ * Example usage in onChange: 
+ *   onChange={(e) => setValue(handleCurrencyInputChange(e.target.value))}
+ */
+export const handleCurrencyInputChange = (value: string): string => {
+  return formatCurrencyInput(value);
+};
+
+/**
  * Truncate text with ellipsis
  */
 export const truncate = (text: string, maxLength: number): string => {

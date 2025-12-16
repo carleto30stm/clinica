@@ -55,6 +55,7 @@ model User {
   specialty    String?
   phone        String?
   isActive     Boolean    @default(true)
+  hasDiscount  Boolean    @default(false)  // Si true, se aplica descuento al pago total
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -189,4 +190,16 @@ model HourlyRate {
   updatedAt  DateTime       @updatedAt
 
   @@map("hourly_rates")
+}
+
+// Configuración de descuento aplicable a médicos
+model Discount {
+  id        String   @id @default(uuid())
+  amount    Decimal  @db.Decimal(10, 2)  // Monto fijo a descontar del total
+  validFrom DateTime @default(now())
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("discounts")
 }

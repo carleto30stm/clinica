@@ -42,6 +42,7 @@ export const getAll = async (
         specialty: true,
         phone: true,
         isActive: true,
+        hasDiscount: true,
         createdAt: true,
       },
       orderBy: { name: 'asc' },
@@ -149,7 +150,7 @@ export const update = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { name, specialty, phone, isActive } = req.body;
+    const { name, specialty, phone, isActive, hasDiscount } = req.body;
 
     const user = await prisma.user.update({
       where: { id },
@@ -158,6 +159,7 @@ export const update = async (
         ...(specialty !== undefined && { specialty }),
         ...(phone !== undefined && { phone }),
         ...(isActive !== undefined && { isActive }),
+        ...(hasDiscount !== undefined && { hasDiscount }),
       },
       select: {
         id: true,
@@ -167,6 +169,7 @@ export const update = async (
         specialty: true,
         phone: true,
         isActive: true,
+        hasDiscount: true,
         updatedAt: true,
       },
     });

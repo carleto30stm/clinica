@@ -31,6 +31,7 @@ import DoctorsSummaryTable from '../../components/dashboard/DoctorsSummaryTable'
 import StatisticsCharts from '../../components/dashboard/StatisticsCharts';
 import TrendAnalysis from '../../components/dashboard/TrendAnalysis';
 import ExportData from '../../components/dashboard/ExportData';
+import { formatCurrency } from '../../utils/formatters';
 
 export const Statistics: React.FC = () => {
   const navigate = useNavigate();
@@ -180,7 +181,7 @@ export const Statistics: React.FC = () => {
             <Grid item xs={6} md={3}>
               <Typography color="text.secondary">Pago Estimado</Typography>
               <Typography variant="h5">
-                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(doctorStats.totalPayment || 0)}
+                {formatCurrency(doctorStats.totalPayment)}
               </Typography>
             </Grid>
           </Grid>

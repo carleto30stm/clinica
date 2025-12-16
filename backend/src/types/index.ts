@@ -56,6 +56,7 @@ export interface UpdateUserRequest {
   specialty?: string;
   phone?: string;
   isActive?: boolean;
+  hasDiscount?: boolean;
 }
 
 // Shift types
@@ -154,6 +155,9 @@ export interface DoctorHoursSummary {
   rotatingShifts: number;
   totalPayment?: number;
   paymentBreakdown?: Array<{ periodType: string; hours: number; amount: number }>;
+  hasDiscount?: boolean;
+  discountAmount?: number;
+  finalPayment?: number;  // totalPayment - discountAmount
 }
 
 export interface MonthlyStats {

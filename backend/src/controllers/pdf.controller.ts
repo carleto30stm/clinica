@@ -225,8 +225,8 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
         startDateTime: { gte: start, lte: end },
       },
       include: {
-        doctors: { include: { doctor: { select: { id: true, name: true, specialty: true } } } },
-        doctor: { select: { id: true, name: true, specialty: true } },
+        doctors: { include: { doctor: { select: { id: true, name: true, specialty: true, hasDiscount: true } } } },
+        doctor: { select: { id: true, name: true, specialty: true, hasDiscount: true } },
         holiday: true,
       },
       orderBy: { startDateTime: 'asc' },
@@ -251,7 +251,7 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
     const nightRate = rateMap.get('WEEKDAY_NIGHT') || 0;
 
     // Calculate hours and payment per doctor (reuse logic from stats.controller)
-    const doctorMap = new Map<string, { name: string; specialty: string; weekdayHours: number; weekendHours: number; nightHours: number }>();
+    const doctorMap = new Map<string, { name: string; specialty: string; weekdayHours: number; weekendHours: number; nightHours: number; hasDiscount: boolean }>();
 
     for (const s of shifts) {
       const sStart = new Date(s.startDateTime);
@@ -263,7 +263,7 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 
       for (const doc of doctors) {
         if (!doctorMap.has(doc.id)) {
-          doctorMap.set(doc.id, { name: doc.name, specialty: doc.specialty, weekdayHours: 0, weekendHours: 0, nightHours: 0 });
+          doctorMap.set(doc.id, { name: doc.name, specialty: doc.specialty, weekdayHours: 0, weekendHours: 0, nightHours: 0, hasDiscount: doc.hasDiscount || false });
         }
         const entry = doctorMap.get(doc.id)!;
 
@@ -292,17 +292,29 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
       }
     }
 
+    // Get active discount
+    const activeDiscount = await prisma.discount.findFirst({
+      where: { isActive: true },
+      orderBy: { validFrom: 'desc' },
+    });
+    const discountAmount = activeDiscount ? Number(activeDiscount.amount) : 0;
+
     // Calculate payment for each doctor after accumulating all hours
     const doctorsList = Array.from(doctorMap.entries()).map(([id, data]) => {
       const weekdayPay = data.weekdayHours * weekdayRate;
       const weekendPay = data.weekendHours * weekendRate;
       const nightPay = data.nightHours * nightRate;
       const totalPayment = weekdayPay + weekendPay + nightPay;
+      const finalPayment = data.hasDiscount && discountAmount > 0 
+        ? Math.max(0, totalPayment - discountAmount) 
+        : totalPayment;
       
       return { 
         id, 
         ...data,
-        totalPayment 
+        totalPayment,
+        discountAmount: data.hasDiscount ? discountAmount : 0,
+        finalPayment
       };
     });
 
@@ -322,10 +334,10 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
 
     // Table headers
     const tableTop = pdf.y;
-    const colWidths = { name: 140, specialty: 100, weekday: 60, weekend: 60, night: 60, total: 80 };
+    const colWidths = { name: 120, specialty: 80, weekday: 45, weekend: 45, night: 45, total: 65, discount: 55, final: 65 };
     let x = pdf.page.margins.left;
 
-    pdf.fontSize(10).font('Helvetica-Bold');
+    pdf.fontSize(9).font('Helvetica-Bold');
     pdf.text('Médico', x, tableTop, { width: colWidths.name, align: 'left' });
     x += colWidths.name;
     pdf.text('Especialidad', x, tableTop, { width: colWidths.specialty, align: 'left' });
@@ -336,14 +348,18 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
     x += colWidths.weekend;
     pdf.text('Hrs Noc', x, tableTop, { width: colWidths.night, align: 'center' });
     x += colWidths.night;
-    pdf.text('Total Pago', x, tableTop, { width: colWidths.total, align: 'right' });
+    pdf.text('Bruto', x, tableTop, { width: colWidths.total, align: 'right' });
+    x += colWidths.total;
+    pdf.text('Desc.', x, tableTop, { width: colWidths.discount, align: 'right' });
+    x += colWidths.discount;
+    pdf.text('Neto', x, tableTop, { width: colWidths.final, align: 'right' });
 
     pdf.moveDown(0.5);
     pdf.strokeColor('#000').lineWidth(1).moveTo(pdf.page.margins.left, pdf.y).lineTo(pdf.page.width - pdf.page.margins.right, pdf.y).stroke();
     pdf.moveDown(0.5);
 
     // Table rows
-    pdf.font('Helvetica').fontSize(9);
+    pdf.font('Helvetica').fontSize(8);
     for (const doc of doctorsList) {
       x = pdf.page.margins.left;
       const rowTop = pdf.y;
@@ -359,6 +375,10 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
       pdf.text(doc.nightHours.toFixed(1), x, rowTop, { width: colWidths.night, align: 'center' });
       x += colWidths.night;
       pdf.text(`$${doc.totalPayment.toFixed(2)}`, x, rowTop, { width: colWidths.total, align: 'right' });
+      x += colWidths.total;
+      pdf.text(doc.discountAmount > 0 ? `-$${doc.discountAmount.toFixed(2)}` : '-', x, rowTop, { width: colWidths.discount, align: 'right' });
+      x += colWidths.discount;
+      pdf.text(`$${doc.finalPayment.toFixed(2)}`, x, rowTop, { width: colWidths.final, align: 'right' });
 
       pdf.moveDown(0.8);
 
@@ -368,36 +388,84 @@ export const generatePayrollPdf = async (req: Request, res: Response, next: Next
     }
 
     // Footer with totals
-    const totalWeekday = doctorsList.reduce((sum, d) => sum + d.weekdayHours, 0);
-    const totalWeekend = doctorsList.reduce((sum, d) => sum + d.weekendHours, 0);
-    const totalNight = doctorsList.reduce((sum, d) => sum + d.nightHours, 0);
-    const totalPayment = doctorsList.reduce((sum, d) => sum + d.totalPayment, 0);
+const totalWeekday = doctorsList.reduce((sum, d) => sum + d.weekdayHours, 0);
+const totalWeekend = doctorsList.reduce((sum, d) => sum + d.weekendHours, 0);
+const totalNight = doctorsList.reduce((sum, d) => sum + d.nightHours, 0);
+const totalBruto = doctorsList.reduce((sum, d) => sum + d.totalPayment, 0);
+const totalDiscounts = doctorsList.reduce((sum, d) => sum + d.discountAmount, 0);
+const totalNeto = doctorsList.reduce((sum, d) => sum + d.finalPayment, 0);
 
-    pdf.moveDown(1);
-    pdf.strokeColor('#000').lineWidth(2).moveTo(pdf.page.margins.left, pdf.y).lineTo(pdf.page.width - pdf.page.margins.right, pdf.y).stroke();
-    pdf.moveDown(0.5);
+pdf.moveDown(1);
+pdf
+  .strokeColor('#000')
+  .lineWidth(2)
+  .moveTo(pdf.page.margins.left, pdf.y)
+  .lineTo(pdf.page.width - pdf.page.margins.right, pdf.y)
+  .stroke();
 
-    x = pdf.page.margins.left;
-    pdf.fontSize(10).font('Helvetica-Bold');
-    pdf.text('TOTALES:', x, pdf.y, { width: colWidths.name + colWidths.specialty, align: 'left' });
-    x += colWidths.name + colWidths.specialty;
-    pdf.text(totalWeekday.toFixed(1), x, pdf.y, { width: colWidths.weekday, align: 'center' });
-    x += colWidths.weekday;
-    pdf.text(totalWeekend.toFixed(1), x, pdf.y, { width: colWidths.weekend, align: 'center' });
-    x += colWidths.weekend;
-    pdf.text(totalNight.toFixed(1), x, pdf.y, { width: colWidths.night, align: 'center' });
-    x += colWidths.night;
-    pdf.text(`$${totalPayment.toFixed(2)}`, x, pdf.y, { width: colWidths.total, align: 'right' });
+pdf.moveDown(0.5);
 
-    // Signature section
-    pdf.moveDown(3);
-    pdf.fontSize(10).font('Helvetica');
-    pdf.text('Firma Autorización: ____________________________', pdf.page.margins.left, undefined);
+// 🔒 fijamos la Y
+const totalsY = pdf.y;
+const rowHeight = 16;
+x = pdf.page.margins.left;
+pdf.fontSize(9).font('Helvetica-Bold');
 
-    pdf.end();
-  } catch (error) {
-    next(error);
+pdf.text('TOTALES:', x, totalsY, {
+  width: colWidths.name + colWidths.specialty,
+  align: 'left',
+  height: rowHeight,
+});
+x += colWidths.name + colWidths.specialty;
+
+pdf.text(totalWeekday.toFixed(1), x, totalsY, {
+  width: colWidths.weekday,
+  align: 'center',
+  height: rowHeight,
+});
+x += colWidths.weekday;
+
+pdf.text(totalWeekend.toFixed(1), x, totalsY, {
+  width: colWidths.weekend,
+  align: 'center',
+  height: rowHeight,
+});
+x += colWidths.weekend;
+
+pdf.text(totalNight.toFixed(1), x, totalsY, {
+  width: colWidths.night,
+  align: 'center',
+  height: rowHeight,
+});
+x += colWidths.night;
+
+pdf.text(`$${totalBruto.toFixed(2)}`, x, totalsY, {
+  width: colWidths.total,
+  align: 'right',
+  height: rowHeight,
+});
+x += colWidths.total;
+
+pdf.text(
+  totalDiscounts > 0 ? `-$${totalDiscounts.toFixed(2)}` : '-',
+  x,
+  totalsY,
+  {
+    width: colWidths.discount,
+    align: 'right',
+    height: rowHeight,
   }
-};
+);
+x += colWidths.discount;
 
+pdf.text(`$${totalNeto.toFixed(2)}`, x, totalsY, {
+  width: colWidths.final,
+  align: 'right',
+  height: rowHeight,
+})
+
+// Bajamos manualmente una fila
+pdf.y = totalsY + rowHeight;
+
+pdf.end(); } catch (error) { next(error); } };
 export default { generateSchedulePdf, generatePayrollPdf };

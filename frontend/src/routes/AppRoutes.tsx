@@ -10,6 +10,7 @@ import DoctorManagement from '@/pages/admin/DoctorManagement';
 import MonthlyCalendar from '@/pages/admin/MonthlyCalendar';
 import HolidayManagement from '@/pages/admin/HolidayManagement';
 import RateSettings from '@/pages/admin/RateSettings';
+import DiscountManagement from '@/pages/admin/DiscountManagement';
 import ShiftGenerator from '@/pages/admin/ShiftGenerator';
 import ShiftManagement from '@/pages/admin/ShiftManagement';
 import Statistics from '@/pages/admin/Statistics';
@@ -58,6 +59,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="shifts/generate" element={<ShiftGenerator />} />
         <Route path="holidays" element={<HolidayManagement />} />
         <Route path="rates" element={<RateSettings />} />
+        <Route path="discounts" element={<DiscountManagement />} />
         <Route path="weekends" element={<WeekendView />} />
         <Route path="stats" element={<Statistics />} />
       </Route>

@@ -35,6 +35,7 @@ import {
   Event as EventIcon,
   AutoAwesome as GenerateIcon,
   AttachMoney as RatesIcon,
+  Discount as DiscountIcon,
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
@@ -55,6 +56,7 @@ const adminNavItems: NavItem[] = [
   { text: 'Calendario Mensual', icon: <CalendarIcon />, path: '/admin/calendar' },
   // 'Turnos' group is rendered below as a collapsible section
   { text: 'Tarifas por Hora', icon: <RatesIcon />, path: '/admin/rates' },
+  { text: 'Descuentos', icon: <DiscountIcon />, path: '/admin/discounts' },
 ];
 
 const adminTurnosGroup: NavItem[] = [

@@ -25,6 +25,7 @@ import { Shift, DayCategory } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { calculateShiftPayment } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/formatters';
 
 const getDayCategoryLabel = (category: DayCategory): string => {
   const labels: Record<DayCategory, string> = {
@@ -138,11 +139,10 @@ export const AvailableShifts: React.FC = () => {
                     {(() => {
                       try {
                         const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
-                        const formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
-                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatter.format(b.rate)} = ${formatter.format(b.amount)}`).join(' • ');
+                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatCurrency(b.rate)} = ${formatCurrency(b.amount)}`).join(' • ');
                         return (
                           <Box>
-                            <Typography>{`${Math.round(res.totalHours)}h — ${formatter.format(res.totalAmount)}`}</Typography>
+                            <Typography>{`${Math.round(res.totalHours)}h — ${formatCurrency(res.totalAmount)}`}</Typography>
                             <Typography variant="caption" color="text.secondary">{breakdownStr}</Typography>
                           </Box>
                         );

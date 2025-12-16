@@ -26,7 +26,7 @@ import { useRates } from '../../hooks';
 import { calculateShiftPayment } from '../../utils/helpers';
 import MonthDayFilter from '../../components/filters/MonthDayFilter';
 import { isValidMonth, isValidDateString } from '../../utils/validators';
-import { formatMonthYear } from '../../utils/formatters';
+import { formatMonthYear, formatCurrency } from '../../utils/formatters';
 
 export const MyShifts: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -204,7 +204,7 @@ export const MyShifts: React.FC = () => {
                 Pago estimado — {formatMonthYear(appliedMonth + '-01')}
               </Typography>
               <Typography variant="h3">
-                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalPayment)}
+                {formatCurrency(totalPayment)}
               </Typography>
             </CardContent>
           </Card>
@@ -254,11 +254,10 @@ export const MyShifts: React.FC = () => {
                     {(() => {
                       try {
                         const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
-                        const formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
-                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatter.format(b.rate)} = ${formatter.format(b.amount)}`).join(' • ');
+                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatCurrency(b.rate)} = ${formatCurrency(b.amount)}`).join(' • ');
                         return (
                           <Box>
-                            <Typography>{`${Math.round(res.totalHours)}h — ${formatter.format(res.totalAmount)}`}</Typography>
+                            <Typography>{`${Math.round(res.totalHours)}h — ${formatCurrency(res.totalAmount)}`}</Typography>
                             <Typography variant="caption" color="text.secondary">{breakdownStr}</Typography>
                           </Box>
                         );

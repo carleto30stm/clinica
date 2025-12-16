@@ -33,6 +33,7 @@ export const getMonthlyStats = async (
             id: true,
             name: true,
             specialty: true,
+            hasDiscount: true,
           },
         },
       },
@@ -93,6 +94,7 @@ export const getMonthlyStats = async (
             rotatingShifts: shift.type === 'ROTATING' ? 1 : 0,
             totalPayment: 0,
             paymentBreakdown: [],
+            hasDiscount: shift.doctor.hasDiscount || false,
           };
           try {
             const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
@@ -107,10 +109,30 @@ export const getMonthlyStats = async (
       }
     });
 
-    const doctorsSummary = Array.from(doctorHoursMap.values()).sort(
-      (a, b) => b.totalHours - a.totalHours
-    );
-    const totalPayment = doctorsSummary.reduce((acc, d) => acc + (d.totalPayment || 0), 0);
+    // Get active discount
+    const activeDiscount = await prisma.discount.findFirst({
+      where: { isActive: true },
+      orderBy: { validFrom: 'desc' },
+    });
+    const discountAmount = activeDiscount ? Number(activeDiscount.amount) : 0;
+
+    const doctorsSummary = Array.from(doctorHoursMap.values()).map((doctor) => {
+      if (doctor.hasDiscount && discountAmount > 0) {
+        const finalPayment = Math.max(0, (doctor.totalPayment || 0) - discountAmount);
+        return {
+          ...doctor,
+          discountAmount,
+          finalPayment,
+        };
+      }
+      return {
+        ...doctor,
+        discountAmount: 0,
+        finalPayment: doctor.totalPayment || 0,
+      };
+    }).sort((a, b) => b.totalHours - a.totalHours);
+    
+    const totalPayment = doctorsSummary.reduce((acc, d) => acc + (d.finalPayment || 0), 0);
 
     res.json({
       month: targetMonth + 1,

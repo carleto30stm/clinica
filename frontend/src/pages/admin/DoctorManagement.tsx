@@ -23,6 +23,7 @@ import {
   Typography,
   Chip,
   Alert,
+  Switch,
 } from '@mui/material';
 import { ConfirmModal } from '../../components/modal/ConfirmModal';
 import {
@@ -161,6 +162,15 @@ export const DoctorManagement: React.FC = () => {
     }
   };
 
+  const handleToggleDiscount = async (user: User) => {
+    try {
+      await userApi.update(user.id, { hasDiscount: !user.hasDiscount });
+      loadUsers();
+    } catch (err) {
+      setError('Error al actualizar el descuento');
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={4}>
@@ -197,6 +207,7 @@ export const DoctorManagement: React.FC = () => {
               <TableCell>Rol</TableCell>
               <TableCell>Especialidad</TableCell>
               <TableCell>Estado</TableCell>
+              <TableCell align="center">Descuento</TableCell>
               <TableCell align="center">Acciones</TableCell>
             </TableRow>
           </TableHead>
@@ -222,6 +233,18 @@ export const DoctorManagement: React.FC = () => {
                     size="small"
                     onClick={() => handleToggleActive(user)}
                   />
+                </TableCell>
+                <TableCell align="center">
+                  {user.role === 'DOCTOR' ? (
+                    <Switch
+                      checked={user.hasDiscount || false}
+                      onChange={() => handleToggleDiscount(user)}
+                      color="warning"
+                      title={user.hasDiscount ? 'Descuento activo' : 'Sin descuento'}
+                    />
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">-</Typography>
+                  )}
                 </TableCell>
                 <TableCell align="center">
                   <IconButton onClick={() => handleOpenDialog(user)} title="Editar">

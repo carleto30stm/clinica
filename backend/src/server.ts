@@ -11,6 +11,7 @@ import statsRoutes from './routes/stats.routes';
 import holidayRoutes from './routes/holiday.routes';
 import rateRoutes from './routes/rate.routes';
 import printRoutes from './routes/print.routes';
+import discountRoutes from './routes/discount.routes';
 
 // Import error handler
 import errorHandler from './middleware/errorHandler';
@@ -41,6 +42,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/rates', rateRoutes);
 app.use('/api/print', printRoutes);
+app.use('/api/discounts', discountRoutes);
 
 // 404 handler
 app.use((_req, res) => {

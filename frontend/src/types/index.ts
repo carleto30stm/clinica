@@ -7,6 +7,7 @@ export interface User {
   specialty?: string | null;
   phone?: string | null;
   isActive: boolean;
+  hasDiscount?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -128,6 +129,9 @@ export interface DoctorHoursSummary {
   rotatingShifts: number;
   totalPayment?: number;
   paymentBreakdown?: Array<{ periodType: string; hours: number; amount: number }>;
+  hasDiscount?: boolean;
+  discountAmount?: number;
+  finalPayment?: number;
 }
 
 export interface MonthlyStats {
@@ -182,4 +186,23 @@ export interface HourlyRate {
 export interface UpdateHourlyRateData {
   periodType: RatePeriodType;
   rate: number;
+}
+
+// Discount types
+export interface Discount {
+  id: string;
+  amount: number;
+  validFrom: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDiscountData {
+  amount: number;
+}
+
+export interface UpdateDiscountData {
+  amount?: number;
+  isActive?: boolean;
 }

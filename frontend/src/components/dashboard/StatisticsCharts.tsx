@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { Box, Paper, Typography, useTheme } from '@mui/material';
 import { MonthlyStats } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface StatisticsChartsProps {
   stats: MonthlyStats | null;
@@ -107,7 +108,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = ({ stats, loadi
         </Paper>
         <Paper sx={{ p: 2, flex: 1, textAlign: 'center' }}>
           <Typography variant="h6" color="info.main">
-            {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(stats.totalPayment || 0)}
+            {formatCurrency(stats.totalPayment)}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Pago Total Estimado
