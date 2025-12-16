@@ -55,7 +55,6 @@ const adminNavItems: NavItem[] = [
   { text: 'Calendario Mensual', icon: <CalendarIcon />, path: '/admin/calendar' },
   // 'Turnos' group is rendered below as a collapsible section
   { text: 'Tarifas por Hora', icon: <RatesIcon />, path: '/admin/rates' },
-  { text: 'Estadísticas', icon: <StatsIcon />, path: '/admin/stats' },
 ];
 
 const adminTurnosGroup: NavItem[] = [
