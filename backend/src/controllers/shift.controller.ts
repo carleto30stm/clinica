@@ -99,6 +99,51 @@ export const getAll = async (
       where.isAvailable = isAvailable === 'true';
     }
 
+    // Support optional pagination
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+
+    if (page && limit) {
+      const total = await prisma.shift.count({ where });
+      const totalPages = Math.ceil(total / limit);
+      const shifts = await prisma.shift.findMany({
+        where,
+        include: {
+          doctor: {
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+            },
+          },
+          doctors: {
+            include: {
+              doctor: {
+                select: {
+                  id: true,
+                  name: true,
+                  specialty: true,
+                },
+              },
+            },
+            orderBy: { assignedAt: 'asc' },
+          },
+          createdByAdmin: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { startDateTime: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      res.json({ shifts, pagination: { page, limit, total, totalPages } });
+      return;
+    }
+
     const shifts = await prisma.shift.findMany({
       where,
       include: {

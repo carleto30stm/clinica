@@ -19,9 +19,10 @@ export interface ShiftFilters {
 }
 
 export const shiftApi = {
-  getAll: async (filters?: ShiftFilters): Promise<Shift[]> => {
-    const response = await api.get<ShiftsResponse>('/shifts', { params: filters });
-    return response.data.shifts;
+  getAll: async (filters?: ShiftFilters & { page?: number; limit?: number }):
+    Promise<Shift[] | { shifts: Shift[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> => {
+    const response = await api.get<any>('/shifts', { params: filters });
+    return response.data;
   },
 
   getById: async (id: string): Promise<Shift> => {

@@ -145,28 +145,51 @@ export const calculateShiftPayment = (
   const current = new Date(start);
   const pad = (n: number) => String(n).padStart(2, '0');
 
+  // Determine if the ENTIRE shift is holiday/weekend based ONLY on the start date
+  let isShiftHolidayOrWeekend = dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY';
+  if (holidaySet || recurringSet) {
+    const y = start.getFullYear();
+    const m = pad(start.getMonth() + 1);
+    const d = pad(start.getDate());
+    const dateKey = `${y}-${m}-${d}`;
+    const monthDayKey = `${m}-${d}`;
+
+    const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+    const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+    const isWeekend = start.getDay() === 0 || start.getDay() === 6;
+    isShiftHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+  }
+
   while (current < end) {
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
-    // Determine whether this specific hour falls on a holiday or weekend
-    let isHourHolidayOrWeekend = false;
+    // ---------------------------------------------------------------------------
+    // COMMENTED: Per-hour holiday/weekend discrimination logic
+    // This logic was replaced by using only the shift's start date to determine
+    // if the entire shift is holiday/weekend. Kept for reference.
+    // ---------------------------------------------------------------------------
+    // let isHourHolidayOrWeekend = false;
+    //
+    // if (holidaySet || recurringSet) {
+    //   const y = current.getFullYear();
+    //   const m = pad(current.getMonth() + 1);
+    //   const d = pad(current.getDate());
+    //   const dateKey = `${y}-${m}-${d}`; // YYYY-MM-DD
+    //   const monthDayKey = `${m}-${d}`; // MM-DD
+    //
+    //   const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+    //   const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+    //   const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+    //   isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+    // } else {
+    //   // Fallback to caller-provided dayCategory
+    //   isHourHolidayOrWeekend = dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY';
+    // }
+    // ---------------------------------------------------------------------------
 
-    if (holidaySet || recurringSet) {
-      const y = current.getFullYear();
-      const m = pad(current.getMonth() + 1);
-      const d = pad(current.getDate());
-      const dateKey = `${y}-${m}-${d}`; // YYYY-MM-DD
-      const monthDayKey = `${m}-${d}`; // MM-DD
-
-      const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
-      const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
-      const isWeekend = current.getDay() === 0 || current.getDay() === 6;
-      isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
-    } else {
-      // Fallback to caller-provided dayCategory
-      isHourHolidayOrWeekend = dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY';
-    }
+    // Use the shift-level determination (based on start date only)
+    const isHourHolidayOrWeekend = isShiftHolidayOrWeekend;
 
     let periodType = 'WEEKDAY_DAY';
     if (isHourHolidayOrWeekend) {

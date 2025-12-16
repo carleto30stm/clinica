@@ -22,37 +22,51 @@ export const calculateShiftPaymentFromRates = (
 
   const pad = (n: number) => String(n).padStart(2, '0');
 
+  // Determine if the ENTIRE shift is holiday/weekend based ONLY on the start date
+  let isShiftHolidayOrWeekend = isHolidayOrWeekend;
+  if (holidaySet || recurringSet) {
+    const y = startDateTime.getFullYear();
+    const m = pad(startDateTime.getMonth() + 1);
+    const d = pad(startDateTime.getDate());
+    const dateKey = `${y}-${m}-${d}`;
+    const monthDayKey = `${m}-${d}`;
+
+    const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+    const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+    const isWeekend = startDateTime.getDay() === 0 || startDateTime.getDay() === 6;
+    isShiftHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+  }
+
   while (current < end) {
-    // Determine the end of the current hour slice (next whole hour) or the shift end
-    const nextHour = new Date(current);
-    nextHour.setMinutes(0, 0, 0);
-    nextHour.setHours(current.getHours() + 1);
-    const sliceEnd = nextHour < end ? nextHour : end;
-
-    const sliceMs = sliceEnd.getTime() - current.getTime();
-    const sliceHours = sliceMs / (1000 * 60 * 60); // fractional hours
-
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
-    // Determine whether this specific hour slice falls on a holiday or weekend
-    let isHourHolidayOrWeekend = false;
+    // ---------------------------------------------------------------------------
+    // COMMENTED: Per-hour holiday/weekend discrimination logic
+    // This logic was replaced by using only the shift's start date to determine
+    // if the entire shift is holiday/weekend. Kept for reference.
+    // ---------------------------------------------------------------------------
+    // let isHourHolidayOrWeekend = false;
+    //
+    // if (holidaySet || recurringSet) {
+    //   const y = current.getFullYear();
+    //   const m = pad(current.getMonth() + 1);
+    //   const d = pad(current.getDate());
+    //   const dateKey = `${y}-${m}-${d}`;
+    //   const monthDayKey = `${m}-${d}`;
+    //
+    //   const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
+    //   const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
+    //   const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+    //   isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
+    // } else {
+    //   // Fallback to caller-provided boolean
+    //   isHourHolidayOrWeekend = isHolidayOrWeekend;
+    // }
+    // ---------------------------------------------------------------------------
 
-    if (holidaySet || recurringSet) {
-      const y = current.getFullYear();
-      const m = pad(current.getMonth() + 1);
-      const d = pad(current.getDate());
-      const dateKey = `${y}-${m}-${d}`;
-      const monthDayKey = `${m}-${d}`;
-
-      const isRecurrentHoliday = recurringSet ? recurringSet.has(monthDayKey) : false;
-      const isSpecificHoliday = holidaySet ? holidaySet.has(dateKey) : false;
-      const isWeekend = current.getDay() === 0 || current.getDay() === 6;
-      isHourHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
-    } else {
-      // Fallback to caller-provided boolean
-      isHourHolidayOrWeekend = isHolidayOrWeekend;
-    }
+    // Use the shift-level determination (based on start date only)
+    const isHourHolidayOrWeekend = isShiftHolidayOrWeekend;
 
     let periodType: RatePeriodType;
     if (isHourHolidayOrWeekend) {
@@ -69,13 +83,11 @@ export const calculateShiftPaymentFromRates = (
       breakdown.push(entry);
     }
 
-    entry.hours += sliceHours;
-    entry.amount = entry.hours * entry.rate;
-    totalAmount += rate * sliceHours;
-    totalAmount = Math.round((totalAmount + Number.EPSILON) * 100) / 100; // keep cents stable
+    entry.hours += 1;
+    entry.amount = entry.hours * rate;
+    totalAmount += rate;
 
-    // Advance current to slice end
-    current.setTime(sliceEnd.getTime());
+    current.setHours(current.getHours() + 1);
   }
 
   return { totalAmount, breakdown };

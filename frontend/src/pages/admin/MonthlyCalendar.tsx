@@ -111,10 +111,13 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
   const endDate = endOfMonth(currentDate).toISOString();
   
   const { 
-    data: shifts = [], 
+    data: shiftsData, 
     isLoading: shiftsLoading, 
     error: shiftsError,
   } = useShifts({ startDate, endDate });
+  
+  // Normalize shifts data structure (handle both array and paginated response)
+  const shifts = Array.isArray(shiftsData) ? shiftsData : (shiftsData?.shifts || []);
   
   const { 
     data: doctors = [], 

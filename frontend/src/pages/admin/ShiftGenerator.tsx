@@ -17,6 +17,7 @@ import {
   Chip,
   Card,
   CardContent,
+  Snackbar,
 } from '@mui/material';
 import {
   CalendarMonth as CalendarIcon,
@@ -41,6 +42,7 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseArgentinaDate } from '../../utils/dateHelpers';
+import { formatArgentinaDate } from '../../utils/dateHelpers';
 
 interface ShiftPreview {
   date: Date;
@@ -62,6 +64,9 @@ export const ShiftGenerator: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Snackbar for cross-action feedback
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+
   // Form state
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -69,12 +74,14 @@ export const ShiftGenerator: React.FC = () => {
   });
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('08:00');
-  const [nextDayEnd, setNextDayEnd] = useState(true); // Guardia de 24h
+  // Removed UI control for 24h guard; default to false so shifts do not span next day by default
+  const [nextDayEnd, setNextDayEnd] = useState(false); // Guardia de 24h (disabled by default)
   
   // Day selection
-  const [includeWeekdays, setIncludeWeekdays] = useState(true);
-  const [includeWeekends, setIncludeWeekends] = useState(true);
-  const [includeHolidays, setIncludeHolidays] = useState(true);
+  // Default checkboxes are unchecked per UX request
+  const [includeWeekdays, setIncludeWeekdays] = useState(false);
+  const [includeWeekends, setIncludeWeekends] = useState(false);
+  const [includeHolidays, setIncludeHolidays] = useState(false);
   
   // Required doctors for self-assignable shifts
   const [requiredDoctors, setRequiredDoctors] = useState(1);
@@ -89,15 +96,21 @@ export const ShiftGenerator: React.FC = () => {
     generatePreview();
   }, [selectedMonth, includeWeekdays, includeWeekends, includeHolidays, holidays]);
 
+
   const isHolidayDate = (date: Date): Holiday | undefined => {
+    // Normalize day to YYYY-MM-DD in Argentina local midnight
+    const dayKey = formatArgentinaDate(date);
+
     return holidays.find(holiday => {
-      const holidayDate = parseArgentinaDate(holiday.date);
+      // Normalize holiday date as stored (supports 'YYYY-MM-DD' or ISO)
+      const holidayKey = formatArgentinaDate(parseArgentinaDate(holiday.date));
+
       if (holiday.isRecurrent) {
-        // Compare month and day only for recurrent holidays
-        return holidayDate.getMonth() === date.getMonth() && 
-               holidayDate.getDate() === date.getDate();
+        // Compare month-day for recurrent holidays (MM-DD)
+        return holidayKey.slice(5) === dayKey.slice(5);
       }
-      return isSameDay(holidayDate, date);
+
+      return holidayKey === dayKey;
     });
   };
 
@@ -184,10 +197,19 @@ export const ShiftGenerator: React.FC = () => {
       });
 
       await shiftApi.bulkCreate(shiftsToCreate);
-      setSuccess(`¡${shiftsToCreate.length} turnos creados exitosamente!`);
-      
+      const msg = `¡${shiftsToCreate.length} turnos creados exitosamente!`;
+      setSuccess(msg);
+      setSnackbar({ open: true, message: msg, severity: 'success' });
+
+      // Clear checkboxes and preview after successful generation as requested
+      setIncludeWeekdays(false);
+      setIncludeWeekends(false);
+      setIncludeHolidays(false);
+      setPreview([]);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Error al generar los turnos');
+      const msg = err.response?.data?.error || 'Error al generar los turnos';
+      setError(msg);
+      setSnackbar({ open: true, message: msg, severity: 'error' });
     } finally {
       setGenerating(false);
     }
@@ -262,18 +284,6 @@ export const ShiftGenerator: React.FC = () => {
               size="small"
             />
           </Box>
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={nextDayEnd}
-                onChange={(e) => setNextDayEnd(e.target.checked)}
-              />
-            }
-            label="Guardia de 24h (termina al día siguiente)"
-            sx={{ mt: 1 }}
-          />
-
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle2" gutterBottom>
@@ -470,6 +480,18 @@ export const ShiftGenerator: React.FC = () => {
         onCancel={() => setConfirmOpen(false)}
         loading={generating}
       />
+
+      {/* Snackbar for feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

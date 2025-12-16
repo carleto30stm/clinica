@@ -30,6 +30,7 @@ import {
   MenuItem,
   Switch,
   FormControlLabel,
+  Pagination,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -99,15 +100,23 @@ export const ShiftManagement: React.FC = () => {
     notes: '',
   });
   const [selectedShiftIds, setSelectedShiftIds] = useState<Set<string>>(new Set());
+  // Pagination state
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(50);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalShifts, setTotalShifts] = useState<number>(0);
   const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    // Reset to first page when filters change
+    setPage(1);
+    loadData(1, limit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appliedMonth, appliedDay]);
 
-  const loadData = async () => {
+  const loadData = async (pageParam?: number, limitParam?: number) => {
     setSelectedShiftIds(new Set());
     setLoading(true);
     try {
@@ -134,11 +143,28 @@ export const ShiftManagement: React.FC = () => {
         end = endOfMonth(new Date(y, m - 1, 1));
       }
 
-      const [shiftsData, doctorsData] = await Promise.all([
-        shiftApi.getAll({ startDate: start.toISOString(), endDate: end.toISOString() }),
+      const p = pageParam || page;
+      const l = limitParam || limit;
+
+      const [shiftsResp, doctorsData] = await Promise.all([
+        shiftApi.getAll({ startDate: start.toISOString(), endDate: end.toISOString(), page: p, limit: l }) as any,
         userApi.getDoctors(),
       ]);
-      setShifts(shiftsData);
+
+      // Response when paginated: { shifts, pagination }
+      if ((shiftsResp as any).shifts) {
+        setShifts((shiftsResp as any).shifts);
+        setTotalShifts((shiftsResp as any).pagination.total);
+        setTotalPages((shiftsResp as any).pagination.totalPages);
+        setPage((shiftsResp as any).pagination.page);
+        setLimit((shiftsResp as any).pagination.limit);
+      } else {
+        // Fallback for non-paginated responses
+        setShifts(shiftsResp as Shift[]);
+        setTotalShifts(shiftsResp.length);
+        setTotalPages(1);
+      }
+
       setDoctors(doctorsData);
     } catch (err) {
       setError('Error al cargar los datos');
@@ -237,7 +263,7 @@ export const ShiftManagement: React.FC = () => {
   };
 
   const selectAllVisible = () => {
-    const visibleIds = shifts.slice(0, 50).map(s => s.id);
+    const visibleIds = shifts.map(s => s.id); // current page visible ids
     setSelectedShiftIds((prev) => {
       const areAllSelected = visibleIds.every(id => prev.has(id));
       if (areAllSelected) return new Set();
@@ -439,6 +465,27 @@ export const ShiftManagement: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Pagination controls */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+        <Box>
+          <Typography variant="body2" color="text.secondary">Mostrando página {page} de {totalPages} — {totalShifts} turnos</Typography>
+        </Box>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Select size="small" value={limit} onChange={(e) => { const newLimit = Number(e.target.value); setLimit(newLimit); loadData(1, newLimit); }}>
+            <MenuItem value={10}>10</MenuItem>
+            <MenuItem value={20}>20</MenuItem>
+            <MenuItem value={50}>50</MenuItem>
+          </Select>
+          <Pagination
+            count={Math.max(1, totalPages)}
+            page={page}
+            onChange={(_, value) => { setPage(value); loadData(value, limit); }}
+            color="primary"
+            size="small"
+          />
+        </Box>
+      </Box>
 
       {/* Bulk delete confirmation modal (reusable) */}
       <ConfirmModal
