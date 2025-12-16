@@ -26,6 +26,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../../lib/queryClient';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useHolidays } from '../../hooks/useHolidays';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -225,6 +227,19 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
     start: startOfMonth(currentDate),
     end: endOfMonth(currentDate),
   });
+
+  // Fetch holidays for the current year to highlight them on the calendar
+  const { data: holidays = [] } = useHolidays({ year: currentDate.getFullYear() });
+
+  const isHolidayDate = (date: Date) => {
+    return holidays.find((h: any) => {
+      const hd = parseArgentinaDate(h.date);
+      if (h.isRecurrent) {
+        return hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate();
+      }
+      return hd.getFullYear() === date.getFullYear() && hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate();
+    });
+  }; 
 
   const getShiftsForDay = (date: Date): Shift[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -494,7 +509,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
   };
 
   // Day cell component (separate to avoid hooks in map loop)
-  const DayCell: React.FC<{ day: Date; dayShifts: Shift[]; isWeekend: boolean }> = ({ day, dayShifts, isWeekend }) => {
+  const DayCell: React.FC<{ day: Date; dayShifts: Shift[]; isWeekend: boolean; isHoliday?: boolean; holidayName?: string }> = ({ day, dayShifts, isWeekend, isHoliday, holidayName }) => {
     const { setNodeRef: setDroppableRef, isOver: isOverDrop } = useDroppable({ id: `day-${format(day, 'yyyy-MM-dd')}` });
     const dayKey = format(day, 'yyyy-MM-dd');
     const isTodayCell = isToday(day);
@@ -523,17 +538,17 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
           sx={{
             minHeight: isMobile ? 60 : 120,
             border: isOverDrop ? '2px dashed' : isTodayCell ? '2px solid' : '1px solid',
-            borderColor: isOverDrop ? 'primary.main' : isTodayCell ? 'primary.main' : isWeekend ? 'error.light' : 'divider',
+            borderColor: isOverDrop ? 'primary.main' : isTodayCell ? 'primary.main' : isHoliday ? 'warning.main' : isWeekend ? 'error.light' : 'divider',
             borderRadius: 1,
             p: 0.5,
-            bgcolor: isOverDrop ? 'primary.50' : isTodayCell ? 'primary.50' : isWeekend ? 'error.50' : 'background.paper',
+            bgcolor: isOverDrop ? 'primary.50' : isTodayCell ? 'primary.50' : isHoliday ? 'warning.50' : isWeekend ? 'error.50' : 'background.paper',
             boxShadow: isOverDrop ? 'inset 0 0 8px rgba(25,118,210,0.3)' : isTodayCell ? 2 : undefined,
             cursor: isAdmin && dayShifts.length > 0 ? 'pointer' : (isMobile && dayShifts.length > 0 ? 'pointer' : 'default'),
             transition: 'all 0.2s ease',
             transform: isOverDrop ? 'scale(1.02)' : 'scale(1)',
             position: 'relative',
             '&:hover': {
-              bgcolor: isTodayCell ? 'primary.100' : isWeekend ? 'error.100' : 'grey.50',
+              bgcolor: isTodayCell ? 'primary.100' : isHoliday ? 'warning.100' : isWeekend ? 'error.100' : 'grey.50',
             },
           }}
           ref={setDroppableRef}
@@ -546,7 +561,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
               sx={{
                 fontWeight: isTodayCell ? 'bold' : 'medium',
                 bgcolor: isTodayCell ? 'primary.main' : undefined,
-                color: isTodayCell ? 'white' : isWeekend ? 'error.main' : 'text.primary',
+                color: isTodayCell ? 'white' : isHoliday ? 'warning.main' : isWeekend ? 'error.main' : 'text.primary',
                 borderRadius: isTodayCell ? '50%' : undefined,
                 width: isTodayCell ? 24 : undefined,
                 height: isTodayCell ? 24 : undefined,
@@ -598,6 +613,9 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
             )}
           </Box>
           <Box sx={{ mt: 0.5 }}>
+            {holidayName && (
+              <Chip label={holidayName} size="small" color="warning" sx={{ mb: 0.5 }} />
+            )}
             {shiftsToShow.map((shift) => (
               <Tooltip
                 key={shift.id}
@@ -872,7 +890,8 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
           {days.map((day) => {
             const dayShifts = getShiftsForDay(day);
             const isWeekend = getDay(day) === 0 || getDay(day) === 6;
-            return <DayCell key={day.toISOString()} day={day} dayShifts={dayShifts} isWeekend={isWeekend} />;
+            const holiday = isHolidayDate(day);
+            return <DayCell key={day.toISOString()} day={day} dayShifts={dayShifts} isWeekend={isWeekend} isHoliday={!!holiday} holidayName={holiday?.name} />;
           })}
         </Grid>
       </Paper>
@@ -907,6 +926,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
               />
             );
           })}
+          <Chip label="Feriado" color="warning" />
           <Chip label="Disponible" sx={{ bgcolor: '#e0e0e0' }} />
         </Box>
       )}

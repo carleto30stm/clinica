@@ -13,16 +13,17 @@ interface Props {
   onOpenDetails: (date: Date) => void;
   onQuickAssign?: (shift: Shift) => void;
   onCreateShift?: (date: Date) => void;
+  holidayName?: string;
 }
 
-export const MobileDayCard: React.FC<Props> = ({ date, shifts, assignedCount, requiredDoctors, onOpenDetails, onQuickAssign, onCreateShift }) => {
+export const MobileDayCard: React.FC<Props> = ({ date, shifts, assignedCount, requiredDoctors, onOpenDetails, onQuickAssign, onCreateShift, holidayName }) => {
   const dateLabel = format(date, "EEE dd 'de' MMM", { locale: es });
   return (
-    <Card sx={{ mb: 1, borderRadius: 2 }}>
+    <Card sx={{ mb: 1, borderRadius: 2, bgcolor: holidayName ? 'warning.50' : undefined }}>
       <CardContent sx={{ p: 1 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Box>
-            <Typography variant="subtitle2">{dateLabel}</Typography>
+            <Typography variant="subtitle2">{dateLabel}{holidayName && <Chip label={holidayName} size="small" color="warning" sx={{ ml: 1 }} />}</Typography>
             <Box display="flex" gap={1} alignItems="center" mt={0.5}>
               <PeopleIcon fontSize="small" />
               <Chip label={`${assignedCount}/${requiredDoctors}`} size="small" />

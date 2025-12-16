@@ -28,9 +28,11 @@ import {
   Add as AddIcon,
   Schedule as ScheduleIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { DoctorOption, CreateShiftData, ShiftType } from '../../types';
+import { DoctorOption, CreateShiftData, ShiftType, Holiday } from '../../types';
+import { useHolidays } from '../../hooks/useHolidays';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 
 interface CreateShiftModalProps {
   open: boolean;
@@ -95,6 +97,11 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
   const [requiredDoctors, setRequiredDoctors] = useState(1);
   const [selectedDoctors, setSelectedDoctors] = useState<DoctorOption[]>([]);
   const [notes, setNotes] = useState('');
+  // New: holiday toggle and selection
+  const [isHoliday, setIsHoliday] = useState(false);
+  const [selectedHoliday, setSelectedHoliday] = useState<Holiday | null>(null);
+
+  const { data: holidays = [] } = useHolidays();
 
   // Reset form when modal opens
   useEffect(() => {
@@ -109,8 +116,26 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
       setSelectedDoctors([]);
       setNotes('');
       setError(null);
+      // reset holiday fields
+      setIsHoliday(false);
+      setSelectedHoliday(null);
+
+      // If the date corresponds to an existing holiday, preselect it
+      if (date && holidays.length > 0) {
+        const found = holidays.find((h: any) => {
+          const hd = parseArgentinaDate(h.date);
+          return isSameDay(hd, date) || (h.isRecurrent && hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate());
+        });
+        if (found) {
+          setIsHoliday(true);
+          setSelectedHoliday(found as Holiday);
+          // Make sensible defaults for holiday shifts
+          setShiftType('ROTATING');
+          setSelfAssignable(true);
+        }
+      }
     }
-  }, [open]);
+  }, [open, holidays, date]);
 
   // Update times when preset changes
   useEffect(() => {
@@ -152,10 +177,13 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
         startDateTime: startDate.toISOString(),
         endDateTime: endDate.toISOString(),
         type: shiftType,
+        // If marked as holiday, include explicit dayCategory so backend stores HOLIDAY
+        ...(isHoliday ? { dayCategory: 'HOLIDAY' as const } : {}),
         selfAssignable,
         requiredDoctors: Math.max(1, requiredDoctors),
         doctorIds: selectedDoctors.map((d) => d.id),
         notes: notes || undefined,
+        ...(selectedHoliday ? { holidayId: selectedHoliday.id } : {}),
       };
 
       await onSave(data);
@@ -265,12 +293,49 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
           </Select>
         </FormControl>
 
+        {/* Holiday toggle */}
+        <FormControlLabel
+          control={
+            <Switch
+              checked={isHoliday}
+              onChange={(e) => {
+                const val = e.target.checked;
+                setIsHoliday(val);
+                if (val) {
+                  // If marking as holiday, default to rotating + self-assignable
+                  setShiftType('ROTATING');
+                  setSelfAssignable(true);
+                }
+              }}
+            />
+          }
+          label="Marcar como feriado"
+          sx={{ mb: 2, display: 'block' }}
+        />
+
+        {/* Select existing holiday (optional) */}
+        {isHoliday && (
+          <Autocomplete
+            size="small"
+            options={holidays}
+            getOptionLabel={(h: any) => `${h.name} — ${format(parseArgentinaDate(h.date), 'dd/MM')}`}
+            value={selectedHoliday}
+            onChange={(_, value) => setSelectedHoliday(value as Holiday | null)}
+            isOptionEqualToValue={(o, v) => o.id === v.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Feriado (opcional)" placeholder="Seleccionar feriado" size="small" />
+            )}
+            sx={{ mb: 2 }}
+          />
+        )}
+
         {/* Self-assignable toggle */}
         <FormControlLabel
           control={
             <Switch
               checked={selfAssignable}
               onChange={(e) => setSelfAssignable(e.target.checked)}
+              disabled={isHoliday} // disable manual toggle when holiday is forced
             />
           }
           label="Permitir auto-asignación"

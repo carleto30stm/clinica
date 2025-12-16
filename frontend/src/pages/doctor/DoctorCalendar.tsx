@@ -33,6 +33,8 @@ import { useUIStore } from '../../store/uiStore';
 import { Shift } from '../../types';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useHolidays } from '../../hooks/useHolidays';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 import { calculateShiftPayment } from '../../utils/helpers';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -70,6 +72,16 @@ export const DoctorCalendar: React.FC = () => {
     end: endOfMonth(currentDate),
   });
 
+  // Holidays for highlighting
+  const { data: holidays = [] } = useHolidays({ year: currentDate.getFullYear() });
+  const isHolidayDate = (date: Date) => {
+    return holidays.find((h: any) => {
+      const hd = parseArgentinaDate(h.date);
+      if (h.isRecurrent) return hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate();
+      return hd.getFullYear() === date.getFullYear() && hd.getMonth() === date.getMonth() && hd.getDate() === date.getDate();
+    });
+  };
+
   const getShiftsForDay = (date: Date): Shift[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
     return shifts.filter((shift) => {
@@ -96,6 +108,7 @@ export const DoctorCalendar: React.FC = () => {
         const hasShift = dayShifts.length > 0;
         const isWeekend = getDay(day) === 0 || getDay(day) === 6;
         const today = isToday(day);
+        const holiday = isHolidayDate(day);
 
         return (
           <Card 
@@ -103,9 +116,9 @@ export const DoctorCalendar: React.FC = () => {
             sx={{ 
               mb: 1, 
               borderRadius: 2,
-              borderLeft: hasShift ? '4px solid' : 'none',
-              borderLeftColor: 'success.main',
-              bgcolor: today ? 'primary.50' : hasShift ? 'success.50' : 'background.paper',
+              borderLeft: holiday ? '4px solid' : (hasShift ? '4px solid' : 'none'),
+              borderLeftColor: holiday ? 'warning.main' : (hasShift ? 'success.main' : undefined),
+              bgcolor: today ? 'primary.50' : holiday ? 'warning.50' : hasShift ? 'success.50' : isWeekend ? 'error.50' : 'background.paper',
             }}
           >
             <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -114,10 +127,11 @@ export const DoctorCalendar: React.FC = () => {
                   <Typography 
                     variant="subtitle1" 
                     fontWeight={today ? 'bold' : 'medium'}
-                    color={today ? 'primary.main' : isWeekend ? 'error.main' : 'text.primary'}
+                    color={today ? 'primary.main' : holiday ? 'warning.main' : isWeekend ? 'error.main' : 'text.primary'}
                   >
                     {format(day, "EEE dd 'de' MMM", { locale: es })}
                     {today && <Chip label="Hoy" size="small" color="primary" sx={{ ml: 1 }} />}
+                    {holiday && <Chip label={holiday.name} size="small" color="warning" sx={{ ml: 1 }} />}
                   </Typography>
                 </Box>
                 {hasShift && (
@@ -187,6 +201,7 @@ export const DoctorCalendar: React.FC = () => {
           const isWeekend = getDay(day) === 0 || getDay(day) === 6;
           const hasShift = dayShifts.length > 0;
           const today = isToday(day);
+          const holiday = isHolidayDate(day);
 
           return (
             <Grid item xs={12 / 7} key={day.toISOString()}>
@@ -194,11 +209,11 @@ export const DoctorCalendar: React.FC = () => {
                 sx={{
                   minHeight: isMobile ? 60 : 100,
                   border: '1px solid',
-                  borderColor: today ? 'primary.main' : hasShift ? 'success.main' : isWeekend ? 'error.light' : 'divider',
+                  borderColor: today ? 'primary.main' : holiday ? 'warning.main' : hasShift ? 'success.main' : isWeekend ? 'error.light' : 'divider',
                   borderWidth: today ? 2 : 1,
                   borderRadius: 1,
                   p: 0.5,
-                  bgcolor: hasShift ? 'success.50' : isWeekend ? 'error.50' : 'background.paper',
+                  bgcolor: today ? 'primary.50' : holiday ? 'warning.50' : hasShift ? 'success.50' : isWeekend ? 'error.50' : 'background.paper',
                 }}
               >
                 <Typography
@@ -331,6 +346,11 @@ export const DoctorCalendar: React.FC = () => {
 
       {/* Calendar view */}
       {showList ? <MobileListView /> : <GridView />}
+
+      {/* Legend */}
+      <Box mt={2} display="flex" gap={2}>
+        <Chip label="Feriado" color="warning" />
+      </Box>
 
       {/* Summary */}
       <Paper sx={{ mt: 3, p: 2 }}>
