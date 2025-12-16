@@ -119,3 +119,54 @@ export const uniqueBy = <T>(array: T[], key: keyof T): T[] => {
     return true;
   });
 };
+
+// Calculate estimated payment for a shift based on hourly rates
+export const calculateShiftPayment = (
+  startIso: string,
+  endIso: string,
+  dayCategory: 'WEEKDAY' | 'WEEKEND' | 'HOLIDAY',
+  hourlyRates: { periodType: string; rate: number }[]
+) => {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const DAY_START = 9;
+  const DAY_END = 21;
+
+  // Create map for quick lookup
+  const rateMap = new Map<string, number>();
+  hourlyRates.forEach((r) => rateMap.set(r.periodType, Number(r.rate)));
+
+  let totalAmount = 0;
+  let totalHours = 0;
+  const breakdown: Array<{ type: string; hours: number; rate: number; amount: number }> = [];
+
+  const current = new Date(start);
+  while (current < end) {
+    const hour = current.getHours();
+    const isDay = hour >= DAY_START && hour < DAY_END;
+
+    let periodType = 'WEEKDAY_DAY';
+    if (dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY') {
+      periodType = isDay ? 'WEEKEND_HOLIDAY_DAY' : 'WEEKEND_HOLIDAY_NIGHT';
+    } else {
+      periodType = isDay ? 'WEEKDAY_DAY' : 'WEEKDAY_NIGHT';
+    }
+
+    const rate = rateMap.get(periodType) || 0;
+
+    const entry = breakdown.find((b) => b.type === periodType);
+    if (entry) {
+      entry.hours += 1;
+      entry.amount = entry.hours * entry.rate;
+    } else {
+      breakdown.push({ type: periodType, hours: 1, rate, amount: rate });
+    }
+
+    totalAmount += rate;
+    totalHours += 1;
+
+    current.setHours(current.getHours() + 1);
+  }
+
+  return { totalAmount, totalHours, breakdown };
+};

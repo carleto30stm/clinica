@@ -11,13 +11,16 @@ import {
 import {
   BarChart as BarChartIcon,
   NavigateNext as NavigateNextIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { statsApi } from '../../api/stats';
+import { printApi } from '../../api/print';
 import { MonthlyStats } from '../../types';
 import MetricsCards from '../../components/dashboard/MetricsCards';
 import DoctorsSummaryTable from '../../components/dashboard/DoctorsSummaryTable';
 import MiniCharts from '../../components/dashboard/MiniCharts';
+import { getErrorMessage } from '../../utils/helpers';
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +28,7 @@ export const AdminDashboard: React.FC = () => {
   const [previousStats, setPreviousStats] = useState<MonthlyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isGeneratingPayrollPdf, setIsGeneratingPayrollPdf] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -52,6 +56,28 @@ export const AdminDashboard: React.FC = () => {
       setError('Error al cargar las estadísticas');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPayrollPdf = async () => {
+    try {
+      setIsGeneratingPayrollPdf(true);
+      const year = currentStats?.year;
+      const month = currentStats?.month;
+
+      const blob = await printApi.getPayrollPdf(year, month);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `liquidacion-${year}-${String(month).padStart(2, '0')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsGeneratingPayrollPdf(false);
     }
   };
 
@@ -113,9 +139,19 @@ export const AdminDashboard: React.FC = () => {
         </Box>
       </Paper>
 
-      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
-        Horas por Médico
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mt: 4, mb: 2 }}>
+        <Typography variant="h5">
+          Horas por Médico
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={isGeneratingPayrollPdf ? <CircularProgress size={20} /> : <DownloadIcon />}
+          onClick={handleDownloadPayrollPdf}
+          disabled={isGeneratingPayrollPdf || !currentStats}
+        >
+          Descargar Liquidación PDF
+        </Button>
+      </Box>
       <DoctorsSummaryTable stats={currentStats} />
     </Box>
   );

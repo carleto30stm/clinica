@@ -91,6 +91,7 @@ import {
   ViewModule as ViewModule,
   ViewList as ViewList,
   Devices as DevicesIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 // DnD kit imports
 // DnD kit will be added later. For now, we implement a Unassigned pool + move modal as fallback.
@@ -190,6 +191,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
   
   // Loading state for individual operations
   const [savingShiftId, setSavingShiftId] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   // Selected shift to show assigned doctors list
   const [selectedShiftDetails, setSelectedShiftDetails] = useState<Shift | null>(null);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
@@ -407,6 +409,29 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
       setSnackbar({ open: true, message: err.response?.data?.error || 'Error al asignar', severity: 'error' });
     } finally {
       setSavingShiftId(null);
+    }
+  };
+
+  const handleDownloadSchedulePdf = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const printModule = await import('../../api/print');
+      const blob = await printModule.printApi.getSchedulePdf(year, month);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cronograma-${year}-${String(month).padStart(2, '0')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSnackbar({ open: true, message: 'PDF descargado', severity: 'success' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.response?.data?.error || 'Error al generar PDF', severity: 'error' });
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
   
@@ -666,6 +691,16 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
             <IconButton onClick={handleNextMonth} size={isMobile ? 'small' : 'medium'}>
               <NextIcon />
             </IconButton>
+            {isAdmin && (
+              <Tooltip title="Descargar Cronograma (PDF)">
+                <span>
+                  <IconButton onClick={handleDownloadSchedulePdf} size={isMobile ? 'small' : 'medium'} disabled={isGeneratingPdf}>
+                    {isGeneratingPdf ? <CircularProgress size={18} /> : <DownloadIcon />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+            {/* Duplicate download button removed */}
           </Box>
           
           {/* Unassigned shifts button for mobile */}

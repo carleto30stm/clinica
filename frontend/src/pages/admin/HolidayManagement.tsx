@@ -29,8 +29,8 @@ import {
 } from '@mui/icons-material';
 import { holidayApi } from '../../api/holidays';
 import { Holiday, CreateHolidayData } from '../../types';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+// format and locale not used in this file
+import { parseArgentinaDate, formatArgentinaDate } from '../../utils/dateHelpers';
 
 export const HolidayManagement: React.FC = () => {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -55,7 +55,9 @@ export const HolidayManagement: React.FC = () => {
   const loadHolidays = async () => {
     try {
       const data = await holidayApi.getAll();
-      setHolidays(data);
+      // Normalize to YYYY-MM-DD to avoid timezone shifts on client
+      const normalized = data.map((h) => ({ ...h, date: formatArgentinaDate(parseArgentinaDate(h.date)) }));
+      setHolidays(normalized);
     } catch (err) {
       setError('Error al cargar los feriados');
     } finally {
@@ -66,8 +68,8 @@ export const HolidayManagement: React.FC = () => {
   const handleOpenDialog = (holiday?: Holiday) => {
     if (holiday) {
       setEditingHoliday(holiday);
-      // Extract date part directly from ISO string to avoid timezone issues
-      const [datePart] = holiday.date.split('T');
+      // Use formatArgentinaDate which uses UTC getters for consistency
+      const datePart = formatArgentinaDate(parseArgentinaDate(holiday.date));
       setFormData({
         date: datePart,
         name: holiday.name,
@@ -171,19 +173,16 @@ export const HolidayManagement: React.FC = () => {
               <TableRow key={holiday.id}>
                 <TableCell>
                   {(() => {
-                    // Parse UTC date correctly to avoid timezone shift
-                    const [datePart] = holiday.date.split('T');
-                    const [year, month, day] = datePart.split('-').map(Number);
-                    const holidayDate = new Date(year, month - 1, day);
-                    return format(holidayDate, "dd 'de' MMMM", { locale: es });
+                    const holidayDate = parseArgentinaDate(holiday.date);
+                    // Use UTC getters since the date is stored as UTC midnight
+                    const day = String(holidayDate.getUTCDate()).padStart(2, '0');
+                    const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                    const month = monthNames[holidayDate.getUTCMonth()];
+                    return `${day} de ${month}`;
                   })()}
                   {!holiday.isRecurrent && (
                     <Typography variant="caption" display="block" color="text.secondary">
-                      {(() => {
-                        const [datePart] = holiday.date.split('T');
-                        const [year] = datePart.split('-').map(Number);
-                        return year;
-                      })()}
+                      {parseArgentinaDate(holiday.date).getUTCFullYear()}
                     </Typography>
                   )}
                 </TableCell>

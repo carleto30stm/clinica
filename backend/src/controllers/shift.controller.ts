@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { CreateShiftRequest, UpdateShiftRequest, DayCategory, AssignmentStatus } from '../types';
 import { ROLES } from '../config/constants';
 import { isWeekend } from '../utils/formatters';
+import { parseArgentinaDate } from '../utils/dateHelpers';
 
 /**
  * Calculate day category based on date
@@ -63,15 +64,23 @@ export const getAll = async (
 
     const where: Record<string, unknown> = {};
 
-    if (startDate && endDate) {
-      where.startDateTime = {
-        gte: new Date(startDate as string),
-        lte: new Date(endDate as string),
-      };
-    } else if (startDate) {
-      where.startDateTime = { gte: new Date(startDate as string) };
-    } else if (endDate) {
-      where.endDateTime = { lte: new Date(endDate as string) };
+    const parseMaybeArgentina = (s?: string | string[]) => {
+      if (!s) return undefined;
+      const str = Array.isArray(s) ? s[0] : s;
+      // If format is YYYY-MM-DD (len == 10) parse as Argentina date (midnight local)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return parseArgentinaDate(str);
+      return new Date(str);
+    };
+
+    const parsedStart = parseMaybeArgentina(startDate as string | undefined);
+    const parsedEnd = parseMaybeArgentina(endDate as string | undefined);
+
+    if (parsedStart && parsedEnd) {
+      where.startDateTime = { gte: parsedStart, lte: parsedEnd };
+    } else if (parsedStart) {
+      where.startDateTime = { gte: parsedStart };
+    } else if (parsedEnd) {
+      where.endDateTime = { lte: parsedEnd };
     }
 
     if (doctorId) {
@@ -709,11 +718,20 @@ export const getMyShifts = async (
       doctorId: req.user!.id,
     };
 
-    if (startDate && endDate) {
-      where.startDateTime = {
-        gte: new Date(startDate as string),
-        lte: new Date(endDate as string),
-      };
+    const parseMaybeArgentina = (s?: string | string[]) => {
+      if (!s) return undefined;
+      const str = Array.isArray(s) ? s[0] : s;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return parseArgentinaDate(str);
+      return new Date(str);
+    };
+
+    const parsedStart = parseMaybeArgentina(startDate as string | undefined);
+    const parsedEnd = parseMaybeArgentina(endDate as string | undefined);
+
+    if (parsedStart && parsedEnd) {
+      where.startDateTime = { gte: parsedStart, lte: parsedEnd };
+    } else if (parsedStart) {
+      where.startDateTime = { gte: parsedStart };
     }
 
     const shifts = await prisma.shift.findMany({
@@ -747,11 +765,18 @@ export const getAvailable = async (
       startDateTime: { gte: new Date() }, // Only future shifts
     };
 
-    if (startDate && endDate) {
-      where.startDateTime = {
-        gte: new Date(startDate as string),
-        lte: new Date(endDate as string),
-      };
+    const parseMaybeArgentina2 = (s?: string | string[]) => {
+      if (!s) return undefined;
+      const str = Array.isArray(s) ? s[0] : s;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return parseArgentinaDate(str);
+      return new Date(str);
+    };
+
+    const parsedStart2 = parseMaybeArgentina2(startDate as string | undefined);
+    const parsedEnd2 = parseMaybeArgentina2(endDate as string | undefined);
+
+    if (parsedStart2 && parsedEnd2) {
+      where.startDateTime = { gte: parsedStart2, lte: parsedEnd2 };
     }
 
     const shifts = await prisma.shift.findMany({

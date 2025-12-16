@@ -2,3 +2,4 @@
 export * from './useShifts';
 export * from './useUsers';
 export * from './useHolidays';
+export * from './useRates';

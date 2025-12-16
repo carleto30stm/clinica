@@ -17,6 +17,7 @@ import {
   Avatar,
   Menu,
   MenuItem,
+  Collapse,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -33,6 +34,9 @@ import {
   Person as PersonIcon,
   Event as EventIcon,
   AutoAwesome as GenerateIcon,
+  AttachMoney as RatesIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../../store/authStore';
 
@@ -49,11 +53,16 @@ const adminNavItems: NavItem[] = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin' },
   { text: 'Gestión de Médicos', icon: <PeopleIcon />, path: '/admin/doctors' },
   { text: 'Calendario Mensual', icon: <CalendarIcon />, path: '/admin/calendar' },
+  // 'Turnos' group is rendered below as a collapsible section
+  { text: 'Tarifas por Hora', icon: <RatesIcon />, path: '/admin/rates' },
+  { text: 'Estadísticas', icon: <StatsIcon />, path: '/admin/stats' },
+];
+
+const adminTurnosGroup: NavItem[] = [
   { text: 'Gestión de Turnos', icon: <AssignmentIcon />, path: '/admin/shifts' },
   { text: 'Generar Turnos', icon: <GenerateIcon />, path: '/admin/shifts/generate' },
   { text: 'Feriados', icon: <EventIcon />, path: '/admin/holidays' },
   { text: 'Fines de Semana', icon: <WeekendIcon />, path: '/admin/weekends' },
-  { text: 'Estadísticas', icon: <StatsIcon />, path: '/admin/stats' },
 ];
 
 const doctorNavItems: NavItem[] = [
@@ -72,8 +81,10 @@ export const MainLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [turnosOpen, setTurnosOpen] = useState(true);
 
   const navItems = user?.role === 'ADMIN' ? adminNavItems : doctorNavItems;
+  const turnosItems = user?.role === 'ADMIN' ? adminTurnosGroup : [];
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -100,6 +111,14 @@ export const MainLayout: React.FC = () => {
     navigate('/login');
   };
 
+  const getActiveTitle = () => {
+    const active = navItems.find((item) => location.pathname.startsWith(item.path));
+    if (active) return active.text;
+    const activeSub = turnosItems.find((item) => location.pathname.startsWith(item.path));
+    if (activeSub) return activeSub.text;
+    return 'Sistema de Turnos';
+  };
+
   const drawer = (
     <Box>
       <Toolbar sx={{ justifyContent: 'center' }}>
@@ -120,6 +139,34 @@ export const MainLayout: React.FC = () => {
             </ListItemButton>
           </ListItem>
         ))}
+        {turnosItems.length > 0 && (
+          <>
+            <ListItem disablePadding>
+              <ListItemButton onClick={() => setTurnosOpen(!turnosOpen)}>
+                <ListItemIcon>
+                  <AssignmentIcon />
+                </ListItemIcon>
+                <ListItemText primary="Turnos" />
+                {turnosOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              </ListItemButton>
+            </ListItem>
+            <Collapse in={turnosOpen} timeout="auto" unmountOnExit>
+              <List component="div" disablePadding>
+                {turnosItems.map((sub) => (
+                  <ListItem key={sub.text} sx={{ pl: 4 }} disablePadding>
+                    <ListItemButton
+                      selected={location.pathname === sub.path}
+                      onClick={() => handleNavClick(sub.path)}
+                    >
+                      <ListItemIcon>{sub.icon}</ListItemIcon>
+                      <ListItemText primary={sub.text} />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </Collapse>
+          </>
+        )}
       </List>
     </Box>
   );
@@ -145,7 +192,7 @@ export const MainLayout: React.FC = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {navItems.find((item) => item.path === location.pathname)?.text || 'Sistema de Turnos'}
+            {getActiveTitle()}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'block' } }}>

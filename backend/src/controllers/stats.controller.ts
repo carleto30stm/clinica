@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
 import { DoctorHoursSummary, DailyCoverage } from '../types';
+import { buildRateMap, calculateShiftPaymentFromRates } from '../utils/paymentHelpers';
 
 /**
  * Get monthly statistics
@@ -47,7 +48,10 @@ export const getMonthlyStats = async (
       return acc + hours;
     }, 0);
 
-    // Calculate hours per doctor
+    // Load rates once for payment calculation
+    const rateMap = await buildRateMap();
+
+    // Calculate hours and payments per doctor
     const doctorHoursMap = new Map<string, DoctorHoursSummary>();
 
     shifts.forEach((shift) => {
@@ -60,8 +64,26 @@ export const getMonthlyStats = async (
           existing.shiftCount += 1;
           if (shift.type === 'FIXED') existing.fixedShifts += 1;
           else existing.rotatingShifts += 1;
+
+          try {
+            const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
+            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+            existing.totalPayment = (existing.totalPayment || 0) + totalAmount;
+            existing.paymentBreakdown = existing.paymentBreakdown || [];
+            breakdown.forEach((b) => {
+              const prev = existing.paymentBreakdown!.find((p) => p.periodType === b.type);
+              if (prev) {
+                prev.hours += b.hours;
+                prev.amount += b.amount;
+              } else {
+                existing.paymentBreakdown!.push({ periodType: b.type, hours: b.hours, amount: b.amount });
+              }
+            });
+          } catch (e) {
+            // ignore calculation error
+          }
         } else {
-          doctorHoursMap.set(shift.doctorId, {
+          const newEntry: DoctorHoursSummary = {
             doctorId: shift.doctorId,
             doctorName: shift.doctor.name,
             specialty: shift.doctor.specialty,
@@ -69,7 +91,18 @@ export const getMonthlyStats = async (
             shiftCount: 1,
             fixedShifts: shift.type === 'FIXED' ? 1 : 0,
             rotatingShifts: shift.type === 'ROTATING' ? 1 : 0,
-          });
+            totalPayment: 0,
+            paymentBreakdown: [],
+          };
+          try {
+            const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
+            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+            newEntry.totalPayment = totalAmount;
+            newEntry.paymentBreakdown = breakdown.map((b) => ({ periodType: b.type, hours: b.hours, amount: b.amount }));
+          } catch (e) {
+            // ignore calculation error
+          }
+          doctorHoursMap.set(shift.doctorId, newEntry);
         }
       }
     });
@@ -77,6 +110,7 @@ export const getMonthlyStats = async (
     const doctorsSummary = Array.from(doctorHoursMap.values()).sort(
       (a, b) => b.totalHours - a.totalHours
     );
+    const totalPayment = doctorsSummary.reduce((acc, d) => acc + (d.totalPayment || 0), 0);
 
     res.json({
       month: targetMonth + 1,
@@ -85,6 +119,7 @@ export const getMonthlyStats = async (
       assignedShifts,
       availableShifts,
       totalHours: Math.round(totalHours * 100) / 100,
+      totalPayment: Math.round(totalPayment * 100) / 100,
       doctorsSummary,
     });
   } catch (error) {
@@ -233,6 +268,18 @@ export const getDoctorHours = async (
         return acc + (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
       }, 0);
 
+    // Compute payments per shift and total payment
+    const rateMap = await buildRateMap();
+    const totalPayment = shifts.reduce((acc, shift) => {
+      try {
+        const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
+        const { totalAmount } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend);
+        return acc + totalAmount;
+      } catch (e) {
+        return acc;
+      }
+    }, 0);
+
     res.json({
       doctor,
       month: targetMonth + 1,
@@ -244,6 +291,7 @@ export const getDoctorHours = async (
         weekendHours: Math.round(weekendHours * 100) / 100,
         shiftCount: shifts.length,
       },
+      totalPayment: Math.round(totalPayment * 100) / 100,
       shifts,
     });
   } catch (error) {

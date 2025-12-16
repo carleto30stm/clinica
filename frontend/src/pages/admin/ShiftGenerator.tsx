@@ -37,10 +37,10 @@ import {
   eachDayOfInterval, 
   addDays,
   getDay,
-  parseISO,
   isSameDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { parseArgentinaDate } from '../../utils/dateHelpers';
 
 interface ShiftPreview {
   date: Date;
@@ -101,7 +101,7 @@ export const ShiftGenerator: React.FC = () => {
 
   const isHolidayDate = (date: Date): Holiday | undefined => {
     return holidays.find(holiday => {
-      const holidayDate = parseISO(holiday.date);
+      const holidayDate = parseArgentinaDate(holiday.date);
       if (holiday.isRecurrent) {
         // Compare month and day only for recurrent holidays
         return holidayDate.getMonth() === date.getMonth() && 

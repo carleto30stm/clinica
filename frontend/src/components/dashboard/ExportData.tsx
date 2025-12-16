@@ -27,16 +27,18 @@ export const ExportData: React.FC<ExportDataProps> = ({
       ['Turnos Asignados', stats.assignedShifts, ''],
       ['Turnos Disponibles', stats.availableShifts, ''],
       ['Horas Totales', stats.totalHours, ''],
+      ['Pago Total Estimado', stats.totalPayment || 0, ''],
       ['Tasa de Ocupación (%)', stats.totalShifts > 0 ? ((stats.assignedShifts / stats.totalShifts) * 100).toFixed(1) : '0', ''],
       ['', '', ''],
       ['Resumen por Médico', '', ''],
-      ['Médico', 'Especialidad', 'Horas Totales', 'Turnos Fijos', 'Turnos Rotativos'],
+      ['Médico', 'Especialidad', 'Horas Totales', 'Turnos Fijos', 'Turnos Rotativos', 'Pago Estimado (ARS)'],
       ...stats.doctorsSummary.map(doctor => [
         doctor.doctorName,
         doctor.specialty || 'Sin especialidad',
         doctor.totalHours,
         doctor.fixedShifts,
-        doctor.rotatingShifts
+        doctor.rotatingShifts,
+        doctor.totalPayment || 0
       ])
     ];
 
@@ -65,13 +67,14 @@ export const ExportData: React.FC<ExportDataProps> = ({
       ['Mes', stats.month, '', '', ''],
       ['Año', stats.year, '', '', ''],
       ['', '', '', '', ''],
-      ['Médico', 'Especialidad', 'Horas Totales', 'Turnos Fijos', 'Turnos Rotativos'],
+      ['Médico', 'Especialidad', 'Horas Totales', 'Turnos Fijos', 'Turnos Rotativos', 'Pago Estimado (ARS)'],
       ...stats.doctorsSummary.map(doctor => [
         doctor.doctorName,
         doctor.specialty || 'Sin especialidad',
         doctor.totalHours,
         doctor.fixedShifts,
-        doctor.rotatingShifts
+        doctor.rotatingShifts,
+        doctor.totalPayment || 0
       ])
     ];
 

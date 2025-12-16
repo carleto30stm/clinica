@@ -20,10 +20,11 @@ import {
   Snackbar,
 } from '@mui/material';
 import { EventAvailable as AssignIcon, Warning as WarningIcon, People as PeopleIcon } from '@mui/icons-material';
-import { useAvailableShifts, useSelfAssignShift } from '../../hooks';
+import { useAvailableShifts, useSelfAssignShift, useRates } from '../../hooks';
 import { Shift, DayCategory } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { calculateShiftPayment } from '../../utils/helpers';
 
 const getDayCategoryLabel = (category: DayCategory): string => {
   const labels: Record<DayCategory, string> = {
@@ -47,6 +48,8 @@ export const AvailableShifts: React.FC = () => {
   // React Query hooks
   const { data: shifts = [], isLoading: loading, error: queryError } = useAvailableShifts();
   const selfAssignMutation = useSelfAssignShift();
+  const { data: rates } = useRates();
+  const ratesForCalc = rates || [];
   
   const [error, setError] = useState(queryError ? 'Error al cargar los turnos disponibles' : '');
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
@@ -100,6 +103,7 @@ export const AvailableShifts: React.FC = () => {
               <TableCell>Fecha</TableCell>
               <TableCell>Tipo de Día</TableCell>
               <TableCell>Horario</TableCell>
+              <TableCell>Horas / Valor</TableCell>
               <TableCell>Plazas</TableCell>
               <TableCell>Notas</TableCell>
               <TableCell align="center">Acción</TableCell>
@@ -129,6 +133,23 @@ export const AvailableShifts: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     {format(start, 'HH:mm')} - {format(end, 'HH:mm')}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      try {
+                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                        const formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatter.format(b.rate)} = ${formatter.format(b.amount)}`).join(' • ');
+                        return (
+                          <Box>
+                            <Typography>{`${Math.round(res.totalHours)}h — ${formatter.format(res.totalAmount)}`}</Typography>
+                            <Typography variant="caption" color="text.secondary">{breakdownStr}</Typography>
+                          </Box>
+                        );
+                      } catch (e) {
+                        return '-';
+                      }
+                    })()}
                   </TableCell>
                   <TableCell>
                     <Box display="flex" alignItems="center" gap={0.5}>

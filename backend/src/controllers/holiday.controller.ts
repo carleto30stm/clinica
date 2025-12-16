@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
+import { formatArgentinaDate, parseArgentinaDate } from '../utils/dateHelpers';
 import { CreateHolidayRequest, UpdateHolidayRequest } from '../types';
 
 /**
@@ -20,8 +21,8 @@ export const getAll = async (
         OR: [
           {
             date: {
-              gte: new Date(yearNum, 0, 1),
-              lt: new Date(yearNum + 1, 0, 1),
+              gte: new Date(Date.UTC(yearNum, 0, 1)),
+              lt: new Date(Date.UTC(yearNum + 1, 0, 1)),
             },
             isRecurrent: false,
           },
@@ -37,7 +38,13 @@ export const getAll = async (
       orderBy: { date: 'asc' },
     });
 
-    res.json({ holidays });
+    // Normalize date to YYYY-MM-DD (Argentina timezone) before returning
+    const normalized = holidays.map((h) => ({
+      ...h,
+      date: formatArgentinaDate(new Date(h.date)),
+    }));
+
+    res.json({ holidays: normalized });
   } catch (error) {
     next(error);
   }
@@ -63,7 +70,9 @@ export const getById = async (
       return;
     }
 
-    res.json({ holiday });
+    // Normalize date
+    const normalizedHoliday = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    res.json({ holiday: normalizedHoliday });
   } catch (error) {
     next(error);
   }
@@ -80,15 +89,16 @@ export const create = async (
   try {
     const { date, name, isRecurrent = false } = req.body;
 
-    // Parse date as UTC midnight to avoid timezone issues
-    const holidayDate = new Date(`${date}T00:00:00.000Z`);
+    // Parse date as UTC midnight for consistent storage
+    const holidayDate = parseArgentinaDate(date);
 
-    // Check for duplicate holiday on the same date
+    // Check for duplicate holiday on the same date (compare UTC dates)
+    const nextDay = new Date(Date.UTC(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate() + 1));
     const existing = await prisma.holiday.findFirst({
       where: {
         date: {
-          gte: new Date(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate()),
-          lt: new Date(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate() + 1),
+          gte: holidayDate,
+          lt: nextDay,
         },
       },
     });
@@ -106,7 +116,8 @@ export const create = async (
       },
     });
 
-    res.status(201).json({ holiday });
+    const normalizedCreated = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    res.status(201).json({ holiday: normalizedCreated });
   } catch (error) {
     next(error);
   }
@@ -134,13 +145,14 @@ export const update = async (
     const holiday = await prisma.holiday.update({
       where: { id },
       data: {
-        ...(date && { date: new Date(`${date}T00:00:00.000Z`) }),
+        ...(date && { date: parseArgentinaDate(date) }),
         ...(name && { name }),
         ...(isRecurrent !== undefined && { isRecurrent }),
       },
     });
 
-    res.json({ holiday });
+    const normalizedUpdated = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    res.json({ holiday: normalizedUpdated });
   } catch (error) {
     next(error);
   }
@@ -181,7 +193,7 @@ export const bulkCreate = async (
       holidaysData.map((holiday) =>
         prisma.holiday.create({
           data: {
-            date: new Date(holiday.date),
+            date: parseArgentinaDate(holiday.date),
             name: holiday.name,
             isRecurrent: holiday.isRecurrent ?? false,
           },
@@ -189,8 +201,9 @@ export const bulkCreate = async (
       )
     );
 
+    const normalizedCreatedHolidays = createdHolidays.map((h) => ({ ...h, date: formatArgentinaDate(new Date(h.date)) }));
     res.status(201).json({
-      holidays: createdHolidays,
+      holidays: normalizedCreatedHolidays,
       message: `${createdHolidays.length} feriados creados exitosamente`,
     });
   } catch (error) {

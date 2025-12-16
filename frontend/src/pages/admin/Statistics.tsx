@@ -177,6 +177,12 @@ export const Statistics: React.FC = () => {
               <Typography color="text.secondary">Horas Fin de Semana</Typography>
               <Typography variant="h5" color="error.main">{doctorStats.summary.weekendHours}h</Typography>
             </Grid>
+            <Grid item xs={6} md={3}>
+              <Typography color="text.secondary">Pago Estimado</Typography>
+              <Typography variant="h5">
+                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(doctorStats.totalPayment || 0)}
+              </Typography>
+            </Grid>
           </Grid>
         </Paper>
       )}

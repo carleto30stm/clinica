@@ -13,6 +13,10 @@ export const config = {
     FIXED: 'FIXED' as const,
     ROTATING: 'ROTATING' as const,
   },
+  timezone: {
+    name: 'America/Argentina/Buenos_Aires',
+    offset: -3, // UTC-3
+  },
 };
 
 export const ROLES = config.roles;

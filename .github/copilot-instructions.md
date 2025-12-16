@@ -4,6 +4,14 @@
 
 Sistema de gestión de turnos para clínica médica. Permite a administradores gestionar el calendario mensual de guardias de 24 horas y a los doctores auto-asignarse turnos disponibles.
 
+**IMPORTANTE - Zona Horaria:**
+- El sistema opera en zona horaria de Argentina (America/Argentina/Buenos_Aires, UTC-3)
+- Todas las fechas y horas deben manejarse en esta zona horaria
+- Backend: Usar funciones de `src/utils/dateHelpers.ts` para manejo consistente de fechas
+- Frontend: Las fechas se manejan localmente (el navegador ya está en zona horaria local)
+- Al parsear fechas desde strings YYYY-MM-DD, usar `new Date(year, month - 1, day)` para evitar problemas de UTC
+- Nunca usar `.toISOString()` para comparar fechas o guardar fechas de calendario (solo para timestamps)
+
 ## Tech Stack
 
 ### Backend
@@ -249,6 +257,38 @@ export const formatShiftDuration = (start: Date, end: Date): string => {
 export const capitalize = (str: string): string => {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 };
+```
+
+### Date Handling - Argentina Timezone
+
+**Backend (src/utils/dateHelpers.ts):**
+```typescript
+// Parsear fecha YYYY-MM-DD en zona horaria Argentina
+export const parseArgentinaDate = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Formatear fecha a YYYY-MM-DD
+export const formatArgentinaDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Inicio y fin del día en Argentina
+export const startOfDayArgentina = (date: Date): Date => {
+  const newDate = new Date(date);
+  newDate.setHours(0, 0, 0, 0);
+  return newDate;
+};
+```
+
+**Frontend:**
+- Usar `new Date(year, month - 1, day)` para parsear YYYY-MM-DD
+- Evitar `.toISOString()` para fechas de calendario
+- El navegador maneja automáticamente la zona horaria local
 ```
 
 ## Language Guidelines

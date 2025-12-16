@@ -34,6 +34,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = ({ stats, loadi
     hours: Math.round(doctor.totalHours * 100) / 100,
     specialty: doctor.specialty || 'Sin especialidad',
     fullName: doctor.doctorName,
+    payment: Math.round((doctor.totalPayment || 0) * 100) / 100,
   }));
 
   // Datos para gráfico de pie: distribución de tipos de turnos
@@ -104,6 +105,14 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = ({ stats, loadi
             Turnos Disponibles
           </Typography>
         </Paper>
+        <Paper sx={{ p: 2, flex: 1, textAlign: 'center' }}>
+          <Typography variant="h6" color="info.main">
+            {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(stats.totalPayment || 0)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Pago Total Estimado
+          </Typography>
+        </Paper>
       </Box>
 
       {/* Gráfico de barras: Horas por doctor */}
@@ -124,6 +133,7 @@ export const StatisticsCharts: React.FC<StatisticsChartsProps> = ({ stats, loadi
             <YAxis label={{ value: 'Horas', angle: -90, position: 'insideLeft' }} />
             <Tooltip content={<CustomTooltip />} />
             <Bar dataKey="hours" fill={theme.palette.primary.main} />
+            <Bar dataKey="payment" fill={theme.palette.info.main} />
           </BarChart>
         </ResponsiveContainer>
       </Paper>

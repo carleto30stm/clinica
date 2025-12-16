@@ -15,31 +15,91 @@ import {
   Card,
   CardContent,
   Grid,
+  IconButton,
 } from '@mui/material';
 import { shiftApi } from '../../api/shifts';
 import { Shift } from '../../types';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { ChevronLeft as PrevIcon, ChevronRight as NextIcon } from '@mui/icons-material';
 import { es } from 'date-fns/locale';
+import { useRates } from '../../hooks';
+import { calculateShiftPayment } from '../../utils/helpers';
+import MonthDayFilter from '../../components/filters/MonthDayFilter';
+import { isValidMonth, isValidDateString } from '../../utils/validators';
+import { formatMonthYear } from '../../utils/formatters';
 
 export const MyShifts: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { data: rates } = useRates();
+
+  const ratesForCalc = rates || [];
+
+  // Filtering pattern: selected vs applied
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+  const [appliedMonth, setAppliedMonth] = useState<string>(() => format(new Date(), 'yyyy-MM'));
+  const [selectedDay, setSelectedDay] = useState<string>('');
+  const [appliedDay, setAppliedDay] = useState<string | null>(null);
+  const [monthInputError, setMonthInputError] = useState<string | null>(null);
+  const [dayInputError, setDayInputError] = useState<string | null>(null);
 
   useEffect(() => {
     loadShifts();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedMonth, appliedDay]);
+
+  const handleApplyMonth = (m: string) => setAppliedMonth(m);
+  const handleApplyDay = (d: string) => setAppliedDay(d || null);
+
+  const handlePrevMonth = () => setSelectedMonth((prev) => {
+    const [y, m] = prev.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    const prevMonth = subMonths(d, 1);
+    const val = format(prevMonth, 'yyyy-MM');
+    setSelectedMonth(val);
+    setAppliedMonth(val);
+    return val;
+  });
+
+  const handleNextMonth = () => setSelectedMonth((prev) => {
+    const [y, m] = prev.split('-').map(Number);
+    const d = new Date(y, m - 1, 1);
+    const nextMonth = addMonths(d, 1);
+    const val = format(nextMonth, 'yyyy-MM');
+    setSelectedMonth(val);
+    setAppliedMonth(val);
+    return val;
+  });
 
   const loadShifts = async () => {
+    setLoading(true);
+    setError('');
     try {
-      const now = new Date();
-      const start = startOfMonth(now);
-      const end = endOfMonth(now);
-      
-      const data = await shiftApi.getMyShifts({
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-      });
+      if (!isValidMonth(appliedMonth)) {
+        setError('Formato de mes inválido. Use YYYY-MM');
+        setLoading(false);
+        return;
+      }
+
+      let start: Date;
+      let end: Date;
+      if (appliedDay) {
+        if (!isValidDateString(appliedDay)) {
+          setError('Formato de día inválido. Use YYYY-MM-DD');
+          setLoading(false);
+          return;
+        }
+        const d = new Date(appliedDay);
+        start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+        end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+      } else {
+        const [y, m] = appliedMonth.split('-').map(Number);
+        start = startOfMonth(new Date(y, m - 1, 1));
+        end = endOfMonth(new Date(y, m - 1, 1));
+      }
+
+      const data = await shiftApi.getMyShifts({ startDate: start.toISOString(), endDate: end.toISOString() });
       setShifts(data);
     } catch (err) {
       setError('Error al cargar los turnos');
@@ -54,6 +114,15 @@ export const MyShifts: React.FC = () => {
     return acc + (end.getTime() - start.getTime()) / (1000 * 60 * 60);
   }, 0);
 
+  const totalPayment = shifts.reduce((acc, shift) => {
+    try {
+      const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+      return acc + (res.totalAmount || 0);
+    } catch (e) {
+      return acc;
+    }
+  }, 0);
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" p={4}>
@@ -64,9 +133,28 @@ export const MyShifts: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Mis Turnos - {format(new Date(), 'MMMM yyyy', { locale: es })}
-      </Typography>
+      <Box display="flex" alignItems="center" gap={2} mb={2}>
+        <Typography variant="h4" gutterBottom>
+          Mis Turnos
+        </Typography>
+        <Box display="flex" alignItems="center" ml="auto" gap={1}>
+          <IconButton size="small" onClick={handlePrevMonth}><PrevIcon /></IconButton>
+          <Box sx={{ minWidth: 160, textAlign: 'center' }}>{formatMonthYear(appliedMonth + '-01')}</Box>
+          <IconButton size="small" onClick={handleNextMonth}><NextIcon /></IconButton>
+          <MonthDayFilter
+            selectedMonth={selectedMonth}
+            setSelectedMonth={setSelectedMonth}
+            applyMonth={handleApplyMonth}
+            monthInputError={monthInputError}
+            setMonthInputError={setMonthInputError}
+            selectedDay={selectedDay}
+            setSelectedDay={setSelectedDay}
+            applyDay={handleApplyDay}
+            dayInputError={dayInputError}
+            setDayInputError={setDayInputError}
+          />
+        </Box>
+      </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -75,7 +163,7 @@ export const MyShifts: React.FC = () => {
       )}
 
       <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
@@ -85,7 +173,7 @@ export const MyShifts: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
@@ -95,7 +183,7 @@ export const MyShifts: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
@@ -105,6 +193,18 @@ export const MyShifts: React.FC = () => {
                 {shifts.length > 0
                   ? format(new Date(shifts[0].startDateTime), "dd 'de' MMMM, HH:mm", { locale: es })
                   : 'Sin turnos programados'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="text.secondary" gutterBottom>
+                Pago estimado — {formatMonthYear(appliedMonth + '-01')}
+              </Typography>
+              <Typography variant="h3">
+                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalPayment)}
               </Typography>
             </CardContent>
           </Card>
@@ -149,6 +249,23 @@ export const MyShifts: React.FC = () => {
                       color={shift.type === 'FIXED' ? 'primary' : 'secondary'}
                       size="small"
                     />
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      try {
+                        const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                        const formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+                        const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatter.format(b.rate)} = ${formatter.format(b.amount)}`).join(' • ');
+                        return (
+                          <Box>
+                            <Typography>{`${Math.round(res.totalHours)}h — ${formatter.format(res.totalAmount)}`}</Typography>
+                            <Typography variant="caption" color="text.secondary">{breakdownStr}</Typography>
+                          </Box>
+                        );
+                      } catch (e) {
+                        return '-';
+                      }
+                    })()}
                   </TableCell>
                   <TableCell>{shift.notes || '-'}</TableCell>
                 </TableRow>

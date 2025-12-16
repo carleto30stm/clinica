@@ -28,6 +28,7 @@ interface DoctorHoursResponse {
     rotatingHours: number;
     weekendHours: number;
     shiftCount: number;
+    totalPayment?: number;
   };
   shifts: unknown[];
 }

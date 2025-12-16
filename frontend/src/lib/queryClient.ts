@@ -56,4 +56,9 @@ export const queryKeys = {
     monthly: (month: number, year: number) => ['stats', 'monthly', month, year] as const,
     doctors: (startDate?: string, endDate?: string) => ['stats', 'doctors', startDate, endDate] as const,
   },
+
+  // Hourly Rates
+  rates: {
+    all: ['rates'] as const,
+  },
 };

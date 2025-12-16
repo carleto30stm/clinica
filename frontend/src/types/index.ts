@@ -126,6 +126,8 @@ export interface DoctorHoursSummary {
   shiftCount: number;
   fixedShifts: number;
   rotatingShifts: number;
+  totalPayment?: number;
+  paymentBreakdown?: Array<{ periodType: string; hours: number; amount: number }>;
 }
 
 export interface MonthlyStats {
@@ -135,6 +137,7 @@ export interface MonthlyStats {
   assignedShifts: number;
   availableShifts: number;
   totalHours: number;
+  totalPayment?: number;
   doctorsSummary: DoctorHoursSummary[];
 }
 
@@ -163,4 +166,20 @@ export interface ApiError {
   error: string;
   code?: string;
   details?: Array<{ field: string; message: string }>;
+}
+
+// Hourly Rate types
+export type RatePeriodType = 'WEEKDAY_DAY' | 'WEEKDAY_NIGHT' | 'WEEKEND_HOLIDAY_DAY' | 'WEEKEND_HOLIDAY_NIGHT';
+
+export interface HourlyRate {
+  id: string;
+  periodType: RatePeriodType;
+  rate: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateHourlyRateData {
+  periodType: RatePeriodType;
+  rate: number;
 }

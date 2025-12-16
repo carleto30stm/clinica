@@ -9,6 +9,8 @@ import userRoutes from './routes/user.routes';
 import shiftRoutes from './routes/shift.routes';
 import statsRoutes from './routes/stats.routes';
 import holidayRoutes from './routes/holiday.routes';
+import rateRoutes from './routes/rate.routes';
+import printRoutes from './routes/print.routes';
 
 // Import error handler
 import errorHandler from './middleware/errorHandler';
@@ -37,6 +39,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/holidays', holidayRoutes);
+app.use('/api/rates', rateRoutes);
+app.use('/api/print', printRoutes);
 
 // 404 handler
 app.use((_req, res) => {

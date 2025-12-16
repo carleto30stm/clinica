@@ -171,3 +171,22 @@ model RefreshToken {
   @@index([token])
   @@map("refresh_tokens")
 }
+
+// Configuración de tarifas por hora para médicos
+// Tipos de período: WEEKDAY_DAY, WEEKDAY_NIGHT, WEEKEND_HOLIDAY_DAY, WEEKEND_HOLIDAY_NIGHT
+enum RatePeriodType {
+  WEEKDAY_DAY           // Lun-Vie 9:00-21:00
+  WEEKDAY_NIGHT         // Lun-Vie 21:00-9:00
+  WEEKEND_HOLIDAY_DAY   // Sáb-Dom-Feriado 9:00-21:00
+  WEEKEND_HOLIDAY_NIGHT // Sáb-Dom-Feriado 21:00-9:00
+}
+
+model HourlyRate {
+  id         String         @id @default(uuid())
+  periodType RatePeriodType @unique
+  rate       Decimal        @db.Decimal(10, 2)  // Valor por hora en moneda local
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@map("hourly_rates")
+}

@@ -33,15 +33,22 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
           <TableCell align="center">Turnos Fijos</TableCell>
           <TableCell align="center">Turnos Rotativos</TableCell>
           <TableCell align="center">Total Horas</TableCell>
+          <TableCell align="center">Pago estimado</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
-        {stats?.doctorsSummary.map((doctor: DoctorHoursSummary) => (
+        {(() => {
+          const topEarners = (stats?.doctorsSummary || [])
+            .slice()
+            .sort((a, b) => (b.totalPayment || 0) - (a.totalPayment || 0))
+            .slice(0, 3)
+            .map((d) => d.doctorId);
+          return (stats?.doctorsSummary || []).map((doctor: DoctorHoursSummary) => (
           <TableRow
             key={doctor.doctorId}
             hover={clickable}
             onClick={clickable ? () => onDoctorClick?.(doctor.doctorId) : undefined}
-            sx={{ cursor: clickable ? 'pointer' : 'default' }}
+            sx={{ cursor: clickable ? 'pointer' : 'default', bgcolor: topEarners.includes(doctor.doctorId) ? 'info.50' : 'inherit' }}
           >
             <TableCell>{doctor.doctorName}</TableCell>
             <TableCell>
@@ -53,8 +60,13 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
             <TableCell align="center">
               <Typography fontWeight="bold">{doctor.totalHours}h</Typography>
             </TableCell>
+            <TableCell align="center">
+              <Typography fontWeight="bold">
+                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(doctor.totalPayment || 0)}
+              </Typography>
+            </TableCell>
           </TableRow>
-        ))}
+        ))})()}
       </TableBody>
     </Table>
   </TableContainer>

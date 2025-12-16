@@ -99,6 +99,15 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({ stats, loading = fal
         loading={loading}
       />
     </Grid>
+    <Grid item xs={12} sm={6} md={3}>
+      <StatCard
+        title="Pago Total Estimado"
+        value={new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(stats?.totalPayment || 0)}
+        icon={<TimeIcon sx={{ color: 'white' }} />}
+        color="info.main"
+        loading={loading}
+      />
+    </Grid>
   </Grid>
 );
 

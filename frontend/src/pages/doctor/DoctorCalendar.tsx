@@ -28,11 +28,12 @@ import {
   Devices as DevicesIcon,
   AccessTime as TimeIcon,
 } from '@mui/icons-material';
-import { useMyShifts } from '../../hooks';
+import { useMyShifts, useRates } from '../../hooks';
 import { useUIStore } from '../../store/uiStore';
 import { Shift } from '../../types';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { calculateShiftPayment } from '../../utils/helpers';
 
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -43,6 +44,8 @@ export const DoctorCalendar: React.FC = () => {
   const startDate = startOfMonth(currentDate).toISOString();
   const endDate = endOfMonth(currentDate).toISOString();
   const { data: shifts = [], isLoading: loading, error: queryError } = useMyShifts({ startDate, endDate });
+  const { data: rates } = useRates();
+  const ratesForCalc = rates || [];
   const error = queryError ? 'Error al cargar los turnos' : '';
 
   // Responsive design
@@ -211,7 +214,26 @@ export const DoctorCalendar: React.FC = () => {
                   {dayShifts.slice(0, isMobile ? 1 : 3).map((shift) => (
                     <Tooltip
                       key={shift.id}
-                      title={`${format(new Date(shift.startDateTime), 'HH:mm')} - ${format(new Date(shift.endDateTime), 'HH:mm')}`}
+                      title={
+                        <Box>
+                          <Typography fontWeight="bold">{`${format(new Date(shift.startDateTime), 'HH:mm')} - ${format(new Date(shift.endDateTime), 'HH:mm')}`}</Typography>
+                          {(() => {
+                            try {
+                              const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc);
+                              const formatter = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' });
+                              const breakdownStr = res.breakdown.map(b => `${b.type.replace(/_/g, ' ')}: ${b.hours}h x ${formatter.format(b.rate)} = ${formatter.format(b.amount)}`).join(' • ');
+                              return (
+                                <Box>
+                                  <Typography variant="caption">{`${Math.round(res.totalHours)}h — ${formatter.format(res.totalAmount)}`}</Typography>
+                                  <Typography variant="caption" color="text.secondary">{breakdownStr}</Typography>
+                                </Box>
+                              );
+                            } catch(e) {
+                              return null;
+                            }
+                          })()}
+                        </Box>
+                      }
                     >
                       <Chip
                         label={format(new Date(shift.startDateTime), 'HH:mm')}
