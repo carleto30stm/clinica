@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
-import { formatArgentinaDate, parseArgentinaDate, startOfDayArgentina, endOfDayArgentina } from '../utils/dateHelpers';
+import { formatArgentinaDate, formatArgentinaDateFromDB, parseArgentinaDate, startOfDayArgentina, endOfDayArgentina } from '../utils/dateHelpers';
 import { CreateHolidayRequest, UpdateHolidayRequest } from '../types';
 
 /**
@@ -209,7 +209,8 @@ export const getAll = async (
     // Normalize date to YYYY-MM-DD (Argentina timezone) before returning
     const normalized = holidays.map((h) => ({
       ...h,
-      date: formatArgentinaDate(new Date(h.date)),
+      // Use UTC-aware formatter for DB dates to avoid server-timezone dependent shifts
+      date: formatArgentinaDateFromDB(h.date),
     }));
 
     res.json({ holidays: normalized });
@@ -238,8 +239,8 @@ export const getById = async (
       return;
     }
 
-    // Normalize date
-    const normalizedHoliday = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    // Normalize date (holiday.date is already a Date object from Prisma)
+    const normalizedHoliday = { ...holiday, date: formatArgentinaDateFromDB(holiday.date) };
     res.json({ holiday: normalizedHoliday });
   } catch (error) {
     next(error);
@@ -260,8 +261,8 @@ export const create = async (
     // Parse date as UTC midnight for consistent storage
     const holidayDate = parseArgentinaDate(date);
 
-    // Check for duplicate holiday on the same date (compare UTC dates)
-    const nextDay = new Date(Date.UTC(holidayDate.getUTCFullYear(), holidayDate.getUTCMonth(), holidayDate.getUTCDate() + 1));
+    // Check for duplicate holiday on the same date (compare by next day)
+    const nextDay = new Date(holidayDate.getTime() + 24 * 60 * 60 * 1000);
     const existing = await prisma.holiday.findFirst({
       where: {
         date: {
@@ -294,7 +295,8 @@ export const create = async (
     const adminId = req.user?.id;
     await syncHolidayShift(holiday.id, holidayDate, name, requiredDoctors, adminId);
 
-    const normalizedCreated = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    // Return the date normalized from the input (holidayDate) to avoid timezone shifts
+    const normalizedCreated = { ...holiday, date: formatArgentinaDate(holidayDate) };
     res.status(201).json({ holiday: normalizedCreated });
   } catch (error) {
     next(error);
@@ -320,7 +322,8 @@ export const update = async (
       return;
     }
 
-    const oldDate = new Date(existingHoliday.date);
+    // Normalize old date coming from DB into Argentina-local date
+    const oldDate = parseArgentinaDate(formatArgentinaDateFromDB(existingHoliday.date));
     const newDate = date ? parseArgentinaDate(date) : oldDate;
 
     const updatedRequiredDoctors = req.body.requiredDoctors !== undefined 
@@ -348,7 +351,8 @@ export const update = async (
     const adminId = req.user?.id;
     await syncHolidayShift(id, newDate, updatedName, updatedRequiredDoctors, adminId);
 
-    const normalizedUpdated = { ...holiday, date: formatArgentinaDate(new Date(holiday.date)) };
+    // Return the date normalized from the parsed newDate to avoid timezone shifts
+    const normalizedUpdated = { ...holiday, date: formatArgentinaDate(newDate) };
     res.json({ holiday: normalizedUpdated });
   } catch (error) {
     next(error);
@@ -380,7 +384,9 @@ export const remove = async (
     await prisma.holiday.delete({ where: { id } });
 
     // Recalcular dayCategory de turnos afectados
-    const updatedShiftsCount = await recalculateShiftsDayCategory(new Date(holiday.date), 'remove');
+    // Normalize stored holiday date into Argentina-local date for recalculation
+    const holidayDate = parseArgentinaDate(formatArgentinaDateFromDB(holiday.date));
+    const updatedShiftsCount = await recalculateShiftsDayCategory(holidayDate, 'remove');
     console.log(`Feriado eliminado: ${updatedShiftsCount} turnos revertidos a WEEKDAY`);
 
     res.json({ message: 'Feriado eliminado exitosamente' });
@@ -414,7 +420,8 @@ export const bulkCreate = async (
       )
     );
 
-    const normalizedCreatedHolidays = createdHolidays.map((h) => ({ ...h, date: formatArgentinaDate(new Date(h.date)) }));
+    // Use the original input dates to normalize returned holidays to avoid timezone shifts
+    const normalizedCreatedHolidays = createdHolidays.map((h, i) => ({ ...h, date: formatArgentinaDate(parseArgentinaDate(holidaysData[i].date)) }));
     res.status(201).json({
       holidays: normalizedCreatedHolidays,
       message: `${createdHolidays.length} feriados creados exitosamente`,

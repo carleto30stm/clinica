@@ -35,6 +35,19 @@ export const formatArgentinaDate = (date: Date): string => {
 };
 
 /**
+ * Formats a Date value coming from the DB into YYYY-MM-DD using UTC getters.
+ * This is useful when the DB stores a date-only value but the server timezone
+ * may differ from Argentina; using UTC getters preserves the original
+ * date as intended when the value was created via parseArgentinaDate.
+ */
+export const formatArgentinaDateFromDB = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Creates a Date object from ISO string, preserving the intended local time
  * @param isoString - ISO date string
  * @returns Date object

@@ -29,6 +29,8 @@ import {
 } from '@mui/icons-material';
 import { useHolidays, useCreateHoliday, useUpdateHoliday, useDeleteHoliday } from '../../hooks/useHolidays';
 import { Holiday, CreateHolidayData } from '../../types';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { parseArgentinaDate, formatArgentinaDate } from '../../utils/dateHelpers';
 
 export const HolidayManagement: React.FC = () => {
@@ -179,16 +181,12 @@ export const HolidayManagement: React.FC = () => {
               <TableRow key={holiday.id}>
                 <TableCell>
                   {(() => {
-                    const holidayDate = parseArgentinaDate(holiday.date);
-                    // Use UTC getters since the date is stored as UTC midnight
-                    const day = String(holidayDate.getUTCDate()).padStart(2, '0');
-                    const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                    const month = monthNames[holidayDate.getUTCMonth()];
-                    return `${day} de ${month}`;
+                    const hd = parseArgentinaDate(holiday.date);
+                    return format(hd, "dd 'de' MMMM", { locale: es });
                   })()}
                   {!holiday.isRecurrent && (
                     <Typography variant="caption" display="block" color="text.secondary">
-                      {parseArgentinaDate(holiday.date).getUTCFullYear()}
+                      {format(parseArgentinaDate(holiday.date), 'yyyy')}
                     </Typography>
                   )}
                 </TableCell>
