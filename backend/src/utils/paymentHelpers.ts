@@ -18,7 +18,15 @@ export const calculateShiftPaymentFromRates = (
   const DAY_END = 21;
 
   const current = new Date(startDateTime);
-  const end = new Date(endDateTime);
+  let end = new Date(endDateTime);
+
+  // If end is not after start (bad data), normalize it by advancing days until it's after start
+  if (end.getTime() <= current.getTime()) {
+    // avoid importing dateHelpers here to prevent circular deps; do quick normalization
+    while (end.getTime() <= current.getTime()) {
+      end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+    }
+  }
 
   const pad = (n: number) => String(n).padStart(2, '0');
 

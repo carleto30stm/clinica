@@ -31,10 +31,18 @@ import { parseArgentinaDate } from '../../utils/dateHelpers';
 
 const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
+const getPrimaryDoctorId = (shift: Shift): string | null => {
+  // Prefer the first entry in the new doctors relation, otherwise fallback to legacy doctorId
+  if (shift.doctors && shift.doctors.length > 0) return shift.doctors[0].doctorId;
+  return shift.doctorId || null;
+};
+
 const getShiftColor = (shift: Shift, doctors: DoctorOption[]): string => {
-  if (!shift.doctorId) return '#e0e0e0';
-  const doctorIndex = doctors.findIndex((d) => d.id === shift.doctorId);
+  const primaryDoctorId = getPrimaryDoctorId(shift);
+  if (!primaryDoctorId) return '#e0e0e0';
+  const doctorIndex = doctors.findIndex((d) => d.id === primaryDoctorId);
   const colors = ['#bbdefb', '#c8e6c9', '#fff9c4', '#ffccbc', '#d1c4e9', '#b2dfdb', '#f8bbd0', '#ffe0b2'];
+  if (doctorIndex === -1) return colors[0];
   return colors[doctorIndex % colors.length];
 };
 
@@ -248,7 +256,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
     const dateStr = format(date, 'yyyy-MM-dd');
     return shifts.filter((shift) => {
       const shiftDate = format(new Date(shift.startDateTime), 'yyyy-MM-dd');
-      if (filterDoctor && shift.doctorId !== filterDoctor) return false;
+      if (filterDoctor && !(((shift.doctors && shift.doctors.some(d => d.doctorId === filterDoctor)) || shift.doctorId === filterDoctor))) return false;
       return shiftDate === dateStr;
     });
   };
@@ -461,7 +469,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
       <Chip
         label={`${format(new Date(shift.startDateTime), 'HH:mm')} ${shift.doctor?.name ? `- ${shift.doctor.name}` : '- Sin asignar'}`}
         size="small"
-        sx={{ mb: 0.5, bgcolor: shift.doctorId ? getShiftColor(shift, doctors) : '#e0e0e0' }}
+        sx={{ mb: 0.5, bgcolor: ((shift.doctors && shift.doctors.length > 0) || shift.doctorId) ? getShiftColor(shift, doctors) : '#e0e0e0' }}
         onClick={() => setSelectedShiftDetails(shift)}
       />
     );
@@ -500,7 +508,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
           size="small"
           sx={{ 
             mb: 0.5, 
-            bgcolor: shift.doctorId ? getShiftColor(shift, doctors) : '#e0e0e0',
+            bgcolor: ((shift.doctors && shift.doctors.length > 0) || shift.doctorId) ? getShiftColor(shift, doctors) : '#e0e0e0',
             boxShadow: isDragging ? 3 : 0,
             transform: isDragging ? 'scale(1.05)' : 'scale(1)',
             transition: 'box-shadow 0.2s ease, transform 0.2s ease',
@@ -906,7 +914,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
             label={`${format(new Date(activeShift.startDateTime), 'HH:mm')} ${activeShift.doctor?.name ? `- ${activeShift.doctor.name}` : '- Sin asignar'}`}
             size="small"
             sx={{ 
-              bgcolor: activeShift.doctorId ? getShiftColor(activeShift, doctors) : '#e0e0e0',
+              bgcolor: (getPrimaryDoctorId(activeShift) ? getShiftColor(activeShift, doctors) : '#e0e0e0'),
               boxShadow: 4,
               cursor: 'grabbing',
             }}
@@ -1010,7 +1018,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
                       </Box>
                     </Box>
                     <Box>
-                      {(!shift.doctorId || (shift.doctors && (shift.doctors.length < (shift.requiredDoctors || 1)))) && user?.role !== 'ADMIN' && (
+                      {(((shift.doctors && shift.doctors.length) || (shift.doctorId ? 1 : 0)) < (shift.requiredDoctors || 1)) && user?.role !== 'ADMIN' && (
                         <Button size="small" variant="contained" color="success" onClick={() => handleRequestAssign(shift)}>Asignarme</Button>
                       )}
                       {isAdmin && (

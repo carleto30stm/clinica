@@ -71,7 +71,7 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
             </TableCell>
             <TableCell align="center">
               <Typography fontWeight="bold">
-                {formatCurrency(doctor.totalPayment || 0)}
+                {formatCurrency(doctor.brutoPayment ?? doctor.totalPayment ?? 0)}
               </Typography>
             </TableCell>
             <TableCell align="center">
@@ -83,7 +83,7 @@ export const DoctorsSummaryTable: React.FC<DoctorsSummaryTableProps> = ({
             </TableCell>
             <TableCell align="center">
               <Typography fontWeight="bold" color="success.main">
-                {formatCurrency(doctor.finalPayment || doctor.totalPayment || 0)}
+                {formatCurrency(doctor.finalPayment ?? doctor.brutoPayment ?? doctor.totalPayment ?? 0)}
               </Typography>
             </TableCell>
           </TableRow>

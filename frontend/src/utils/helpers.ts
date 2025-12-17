@@ -142,6 +142,12 @@ export const calculateShiftPayment = (
   let totalHours = 0;
   const breakdown: Array<{ type: string; hours: number; rate: number; amount: number }> = [];
 
+  // Normalize end in case it's earlier than or equal to start (e.g. 21:00 -> 09:00 stored as same day)
+  let endNorm = new Date(end);
+  while (endNorm.getTime() <= start.getTime()) {
+    endNorm = new Date(endNorm.getTime() + 24 * 60 * 60 * 1000);
+  }
+
   const current = new Date(start);
   const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -160,7 +166,7 @@ export const calculateShiftPayment = (
     isShiftHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
   }
 
-  while (current < end) {
+  while (current < endNorm) {
     const hour = current.getHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 

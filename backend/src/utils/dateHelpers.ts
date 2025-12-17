@@ -64,3 +64,16 @@ export const endOfDayArgentina = (date: Date): Date => {
   newDate.setHours(23, 59, 59, 999);
   return newDate;
 };
+
+/**
+ * Normaliza el endDateTime para que sea posterior al startDateTime.
+ * Si end <= start, añade días hasta que end > start.
+ * Útil para corregir turnos nocturnos mal guardados donde la fecha de fin quedó en el mismo día.
+ */
+export const normalizeShiftEnd = (start: Date, end: Date): Date => {
+  let normalized = new Date(end);
+  while (normalized.getTime() <= start.getTime()) {
+    normalized = new Date(normalized.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return normalized;
+};

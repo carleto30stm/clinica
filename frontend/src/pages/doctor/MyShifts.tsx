@@ -15,24 +15,37 @@ import {
   Card,
   CardContent,
   Grid,
-  IconButton,
 } from '@mui/material';
 import { shiftApi } from '../../api/shifts';
+import { statsApi } from '../../api/stats';
 import { Shift } from '../../types';
 import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { useRates, useMyExternalHours, useHolidays } from '../../hooks';
+import { useRates, useHolidays } from '../../hooks';
 import { parseArgentinaDate } from '../../utils/dateHelpers';
 import { calculateShiftPayment } from '../../utils/helpers';
 import { MonthFilter } from '../../components/filters/MonthFilter';
 import { isValidMonth } from '../../utils/validators';
 import { formatMonthYear, formatCurrency } from '../../utils/formatters';
+import { useAuthStore } from '../../store/authStore';
 
 export const MyShifts: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { data: rates } = useRates();
+  const { user } = useAuthStore();
+
+  // Payment summary from backend (same calculation as Dashboard)
+  const [paymentSummary, setPaymentSummary] = useState<{
+    shiftsPayment: number;
+    externalPayment: number;
+    brutoPayment: number;
+    hasDiscount: boolean;
+    discountAmount: number;
+    finalPayment: number;
+    externalHours: number;
+  } | null>(null);
 
   const ratesForCalc = rates || [];
 
@@ -44,7 +57,6 @@ export const MyShifts: React.FC = () => {
   const monthParts = appliedMonth.split('-');
   const year = parseInt(monthParts[0]);
   const month = parseInt(monthParts[1]);
-  const { data: externalHours = [] } = useMyExternalHours({ month, year });
 
   // Load holidays for this year so we can compute per-hour holiday rates on the client
   const { data: holidays = [] } = useHolidays({ year });
@@ -101,8 +113,25 @@ export const MyShifts: React.FC = () => {
       const start = startOfMonth(new Date(y, m - 1, 1));
       const end = endOfMonth(new Date(y, m - 1, 1));
 
-      const data = await shiftApi.getMyShifts({ startDate: start.toISOString(), endDate: end.toISOString() });
-      setShifts(data);
+      // Load shifts and payment summary in parallel
+      const [shiftsData, summaryData] = await Promise.all([
+        shiftApi.getMyShifts({ startDate: start.toISOString(), endDate: end.toISOString() }),
+        user?.id ? statsApi.getDoctorHours(user.id, y, m) : null,
+      ]);
+
+      setShifts(shiftsData);
+      
+      if (summaryData) {
+        setPaymentSummary({
+          shiftsPayment: summaryData.shiftsPayment || 0,
+          externalPayment: summaryData.externalPayment || 0,
+          brutoPayment: summaryData.brutoPayment || 0,
+          hasDiscount: summaryData.hasDiscount || false,
+          discountAmount: summaryData.discountAmount || 0,
+          finalPayment: summaryData.finalPayment || 0,
+          externalHours: summaryData.summary?.externalHours || 0,
+        });
+      }
     } catch (err) {
       setError('Error al cargar los turnos');
     } finally {
@@ -110,24 +139,24 @@ export const MyShifts: React.FC = () => {
     }
   };
 
+  // Use client-side calculation which normalizes overnight end times
   const totalHours = shifts.reduce((acc, shift) => {
-    const start = new Date(shift.startDateTime);
-    const end = new Date(shift.endDateTime);
-    return acc + (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-  }, 0);
-
-  const totalPayment = shifts.reduce((acc, shift) => {
     try {
       const res = calculateShiftPayment(shift.startDateTime, shift.endDateTime, shift.dayCategory, ratesForCalc, holidaySet, recurringSet);
-      return acc + (res.totalAmount || 0);
+      return acc + (res.totalHours || 0);
     } catch (e) {
       return acc;
     }
   }, 0);
 
-  const externalTotalHours = externalHours.reduce((sum, e) => sum + Number(e.hours), 0);
-  const externalTotalPayment = externalHours.reduce((sum, e) => sum + (Number(e.hours) * Number(e.rate)), 0);
-  const grandTotalPayment = totalPayment + externalTotalPayment;
+  // Use backend-calculated payment summary (same as Dashboard)
+  const shiftsPayment = paymentSummary?.shiftsPayment || 0;
+  const externalPayment = paymentSummary?.externalPayment || 0;
+  const brutoPayment = paymentSummary?.brutoPayment || 0;
+  const hasDiscount = paymentSummary?.hasDiscount || false;
+  const discountAmount = paymentSummary?.discountAmount || 0;
+  const finalPayment = paymentSummary?.finalPayment || 0;
+  const externalTotalHours = paymentSummary?.externalHours || 0;
 
   if (loading) {
     return (
@@ -205,22 +234,34 @@ export const MyShifts: React.FC = () => {
           <Card sx={{ bgcolor: 'success.50' }}>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
-                Pago Total — {formatMonthYear(appliedMonth + '-01')}
+                Pago Neto — {formatMonthYear(appliedMonth + '-01')}
               </Typography>
               <Typography variant="h3" color="success.main">
-                {formatCurrency(grandTotalPayment)}
+                {formatCurrency(finalPayment)}
               </Typography>
-              {externalTotalPayment > 0 && (
-                <Box mt={1}>
-                  <Typography variant="caption" color="text.secondary">
-                    Turnos: {formatCurrency(totalPayment)}
+              <Box mt={1}>
+                {/* Show breakdown only if there are values */}
+                {shiftsPayment > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Turnos: {formatCurrency(shiftsPayment)}
                   </Typography>
-                  <br />
-                  <Typography variant="caption" color="text.secondary">
-                    Externas: {formatCurrency(externalTotalPayment)}
+                )}
+                {externalPayment > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Horas Externas: {formatCurrency(externalPayment)}
                   </Typography>
-                </Box>
-              )}
+                )}
+                {(shiftsPayment > 0 || externalPayment > 0) && (
+                  <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                    Bruto: {formatCurrency(brutoPayment)}
+                  </Typography>
+                )}
+                {hasDiscount && discountAmount > 0 && (
+                  <Typography variant="body2" color="error.main">
+                    Descuento: -{formatCurrency(discountAmount)}
+                  </Typography>
+                )}
+              </Box>
             </CardContent>
           </Card>
         </Grid>

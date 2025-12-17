@@ -28,8 +28,14 @@ interface DoctorHoursResponse {
     rotatingHours: number;
     weekendHours: number;
     shiftCount: number;
-    totalPayment?: number;
+    externalHours?: number;
   };
+  shiftsPayment?: number;
+  externalPayment?: number;
+  brutoPayment?: number;
+  hasDiscount?: boolean;
+  discountAmount?: number;
+  finalPayment?: number;
   shifts: unknown[];
 }
 

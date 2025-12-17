@@ -759,8 +759,12 @@ export const getMyShifts = async (
   try {
     const { startDate, endDate } = req.query;
 
-    const where: Record<string, unknown> = {
-      doctorId: req.user!.id,
+    // Support shifts where the user is assigned either via legacy doctorId or via the doctors relation
+    const where: Record<string, any> = {
+      OR: [
+        { doctorId: req.user!.id },
+        { doctors: { some: { doctorId: req.user!.id } } },
+      ],
     };
 
     const parseMaybeArgentina = (s?: string | string[]) => {
@@ -774,14 +778,20 @@ export const getMyShifts = async (
     const parsedEnd = parseMaybeArgentina(endDate as string | undefined);
 
     if (parsedStart && parsedEnd) {
-      where.startDateTime = { gte: parsedStart, lte: parsedEnd };
+      where.AND = [{ startDateTime: { gte: parsedStart, lte: parsedEnd } }];
     } else if (parsedStart) {
-      where.startDateTime = { gte: parsedStart };
+      where.AND = [{ startDateTime: { gte: parsedStart } }];
     }
 
     const shifts = await prisma.shift.findMany({
       where,
       orderBy: { startDateTime: 'asc' },
+      include: {
+        doctors: {
+          include: { doctor: { select: { id: true, name: true, specialty: true } } },
+        },
+        doctor: { select: { id: true, name: true, specialty: true } },
+      },
     });
 
     res.json({ shifts });

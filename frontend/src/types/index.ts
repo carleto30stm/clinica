@@ -131,6 +131,7 @@ export interface DoctorHoursSummary {
   fixedShifts: number;
   rotatingShifts: number;
   totalPayment?: number;
+  brutoPayment?: number;
   paymentBreakdown?: Array<{ periodType: string; hours: number; amount: number }>;
   hasDiscount?: boolean;
   discountAmount?: number;

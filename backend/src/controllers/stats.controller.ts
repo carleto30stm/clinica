@@ -28,6 +28,7 @@ export const getMonthlyStats = async (
         },
       },
       include: {
+        // include both legacy single doctor and the new doctors relation
         doctor: {
           select: {
             id: true,
@@ -36,16 +37,34 @@ export const getMonthlyStats = async (
             hasDiscount: true,
           },
         },
+        doctors: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                name: true,
+                specialty: true,
+                hasDiscount: true,
+              },
+            },
+          },
+        },
       },
     });
 
     const totalShifts = shifts.length;
-    const assignedShifts = shifts.filter((s) => s.doctorId).length;
-    const availableShifts = shifts.filter((s) => s.isAvailable && !s.doctorId).length;
+    // A shift is considered assigned if it has at least one doctor (either legacy doctorId or new doctors relation)
+    const assignedShifts = shifts.filter((s) => (s.doctors && s.doctors.length > 0) || s.doctorId).length;
+    // Available means no doctors assigned
+    const availableShifts = shifts.filter((s) => s.isAvailable && !((s.doctors && s.doctors.length > 0) || s.doctorId)).length;
 
-    // Calculate total hours
+    // Calculate total hours (normalize overnight end times if necessary)
     const totalHours = shifts.reduce((acc, shift) => {
-      const hours = (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
+      let effectiveEnd = new Date(shift.endDateTime);
+      while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+        effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+      }
+      const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
       return acc + hours;
     }, 0);
 
@@ -78,59 +97,69 @@ export const getMonthlyStats = async (
     const doctorHoursMap = new Map<string, DoctorHoursSummary>();
 
     shifts.forEach((shift) => {
-      if (shift.doctorId && shift.doctor) {
-        const hours = (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
-        const existing = doctorHoursMap.get(shift.doctorId);
+      // Build list of assigned doctors (supporting legacy doctorId and new doctors relation)
+      const assignedDoctors = (shift.doctors && shift.doctors.length > 0)
+        ? shift.doctors.map((d) => ({ id: d.doctorId, name: d.doctor?.name, specialty: d.doctor?.specialty, hasDiscount: d.doctor?.hasDiscount }))
+        : (shift.doctorId ? [{ id: shift.doctorId, name: shift.doctor?.name, specialty: shift.doctor?.specialty, hasDiscount: shift.doctor?.hasDiscount }] : []);
 
+      if (assignedDoctors.length === 0) return;
+
+      // Normalize end in case it's earlier than start (legacy bad data)
+      let effectiveEnd = new Date(shift.endDateTime);
+      while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+        effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+      }
+      const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
+
+      // Compute payment for the shift (using normalized end)
+      let shiftTotalAmount = 0;
+      let shiftBreakdown: Array<{ type: string; hours: number; amount: number }> = [];
+      try {
+        const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
+        const payment = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, effectiveEnd, isHolidayOrWeekend, holidaySet, recurringSet);
+        shiftTotalAmount = payment.totalAmount;
+        shiftBreakdown = payment.breakdown.map((b) => ({ type: b.type, hours: b.hours, amount: b.amount }));
+      } catch (e) {
+        // ignore calculation error
+      }
+
+      // Each doctor receives full hours and full payment for the shift (no splitting)
+      assignedDoctors.forEach((doc) => {
+        const existing = doctorHoursMap.get(doc.id);
         if (existing) {
           existing.totalHours += hours;
           existing.shiftCount += 1;
           if (shift.type === 'FIXED') existing.fixedShifts += 1;
           else existing.rotatingShifts += 1;
+          existing.totalPayment = (existing.totalPayment || 0) + shiftTotalAmount;
 
-          try {
-            // Compute payment per-hour using preloaded holiday sets
-            const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
-            existing.totalPayment = (existing.totalPayment || 0) + totalAmount;
-            existing.paymentBreakdown = existing.paymentBreakdown || [];
-            breakdown.forEach((b) => {
-              const prev = existing.paymentBreakdown!.find((p) => p.periodType === b.type);
-              if (prev) {
-                prev.hours += b.hours;
-                prev.amount += b.amount;
-              } else {
-                existing.paymentBreakdown!.push({ periodType: b.type, hours: b.hours, amount: b.amount });
-              }
-            });
-          } catch (e) {
-            // ignore calculation error
-          }
+          // merge full breakdown
+          existing.paymentBreakdown = existing.paymentBreakdown || [];
+          shiftBreakdown.forEach((b) => {
+            const prev = existing.paymentBreakdown!.find((p) => p.periodType === b.type);
+            if (prev) {
+              prev.hours += b.hours;
+              prev.amount += b.amount;
+            } else {
+              existing.paymentBreakdown!.push({ periodType: b.type, hours: b.hours, amount: b.amount });
+            }
+          });
         } else {
           const newEntry: DoctorHoursSummary = {
-            doctorId: shift.doctorId,
-            doctorName: shift.doctor.name,
-            specialty: shift.doctor.specialty,
+            doctorId: doc.id,
+            doctorName: doc.name || 'Desconocido',
+            specialty: doc.specialty || null,
             totalHours: hours,
             shiftCount: 1,
             fixedShifts: shift.type === 'FIXED' ? 1 : 0,
             rotatingShifts: shift.type === 'ROTATING' ? 1 : 0,
-            totalPayment: 0,
-            paymentBreakdown: [],
-            hasDiscount: shift.doctor.hasDiscount || false,
+            totalPayment: shiftTotalAmount,
+            paymentBreakdown: shiftBreakdown.map((b) => ({ periodType: b.type, hours: b.hours, amount: b.amount })),
+            hasDiscount: doc.hasDiscount || false,
           };
-          try {
-            // Compute payment per-hour using preloaded holiday sets
-            const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-            const { totalAmount, breakdown } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
-            newEntry.totalPayment = totalAmount;
-            newEntry.paymentBreakdown = breakdown.map((b) => ({ periodType: b.type, hours: b.hours, amount: b.amount }));
-          } catch (e) {
-            // ignore calculation error
-          }
-          doctorHoursMap.set(shift.doctorId, newEntry);
+          doctorHoursMap.set(doc.id, newEntry);
         }
-      }
+      });
     });
 
     // Get external hours for the same period
@@ -195,18 +224,22 @@ export const getMonthlyStats = async (
     const discountAmount = activeDiscount ? Number(activeDiscount.amount) : 0;
 
     const doctorsSummary = Array.from(doctorHoursMap.values()).map((doctor) => {
+      // Expose bruto (totalPayment before discounts) explicitly, and compute final (net) = bruto - discount
+      const bruto = doctor.totalPayment || 0;
       if (doctor.hasDiscount && discountAmount > 0) {
-        const finalPayment = Math.max(0, (doctor.totalPayment || 0) - discountAmount);
+        const finalPayment = Math.max(0, bruto - discountAmount);
         return {
           ...doctor,
+          brutoPayment: bruto,
           discountAmount,
           finalPayment,
         };
       }
       return {
         ...doctor,
+        brutoPayment: bruto,
         discountAmount: 0,
-        finalPayment: doctor.totalPayment || 0,
+        finalPayment: bruto,
       };
     }).sort((a, b) => b.totalHours - a.totalHours);
     
@@ -260,6 +293,17 @@ export const getDailyCoverage = async (
             specialty: true,
           },
         },
+        doctors: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                name: true,
+                specialty: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { startDateTime: 'asc' },
     });
@@ -279,7 +323,7 @@ export const getDailyCoverage = async (
 
       // Calculate coverage percentage (assuming 3 shifts = 100% coverage)
       const expectedShifts = 3; // Morning, afternoon, night
-      const assignedDayShifts = dayShifts.filter((s) => s.doctorId).length;
+      const assignedDayShifts = dayShifts.filter((s) => (s.doctors && s.doctors.length > 0) || s.doctorId).length;
       const coveragePercentage = Math.min((assignedDayShifts / expectedShifts) * 100, 100);
 
       coverage.push({
@@ -332,31 +376,64 @@ export const getDoctorHours = async (
       return;
     }
 
+    // Find shifts where the doctor is assigned either via legacy doctorId or via the doctors relation
     const shifts = await prisma.shift.findMany({
       where: {
-        doctorId,
-        startDateTime: {
-          gte: startOfMonth,
-          lte: endOfMonth,
+        AND: [
+          {
+            startDateTime: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
+          },
+          {
+            OR: [
+              { doctorId },
+              { doctors: { some: { doctorId } } },
+            ],
+          },
+        ],
+      },
+      include: {
+        doctors: {
+          include: { doctor: { select: { id: true, name: true, specialty: true, hasDiscount: true } } },
         },
+        doctor: { select: { id: true, name: true, specialty: true, hasDiscount: true } },
       },
       orderBy: { startDateTime: 'asc' },
     });
 
+    // When multiple doctors are assigned to a shift, each doctor receives the full shift hours (do not split hours)
     const totalHours = shifts.reduce((acc, shift) => {
-      return acc + (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
+      // Normalize end in case it's earlier than start (legacy bad data)
+      let effectiveEnd = new Date(shift.endDateTime);
+      while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+        effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+      }
+      const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
+      return acc + hours;
     }, 0);
 
     const fixedHours = shifts
       .filter((s) => s.type === 'FIXED')
       .reduce((acc, shift) => {
-        return acc + (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
+        let effectiveEnd = new Date(shift.endDateTime);
+        while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+          effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+        const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
+        return acc + hours;
       }, 0);
 
     const rotatingHours = shifts
       .filter((s) => s.type === 'ROTATING')
       .reduce((acc, shift) => {
-        return acc + (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
+        let effectiveEnd = new Date(shift.endDateTime);
+        while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+          effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+        const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
+        return acc + hours;
       }, 0);
 
     const weekendHours = shifts
@@ -365,7 +442,12 @@ export const getDoctorHours = async (
         return day === 0 || day === 6;
       })
       .reduce((acc, shift) => {
-        return acc + (shift.endDateTime.getTime() - shift.startDateTime.getTime()) / (1000 * 60 * 60);
+        let effectiveEnd = new Date(shift.endDateTime);
+        while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+          effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+        const hours = (effectiveEnd.getTime() - new Date(shift.startDateTime).getTime()) / (1000 * 60 * 60);
+        return acc + hours;
       }, 0);
 
     // Compute payments per shift and total payment
@@ -392,15 +474,54 @@ export const getDoctorHours = async (
       }
     });
 
-    const totalPayment = shifts.reduce((acc, shift) => {
+    const shiftsPayment = shifts.reduce((acc, shift) => {
       try {
+        // Normalize end in case it's earlier than start
+        let effectiveEnd = new Date(shift.endDateTime);
+        while (effectiveEnd.getTime() <= new Date(shift.startDateTime).getTime()) {
+          effectiveEnd = new Date(effectiveEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
         const isHolidayOrWeekend = shift.dayCategory === 'WEEKEND' || shift.dayCategory === 'HOLIDAY';
-        const { totalAmount } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, shift.endDateTime, isHolidayOrWeekend, holidaySet, recurringSet);
+        const { totalAmount } = calculateShiftPaymentFromRates(rateMap, shift.startDateTime, effectiveEnd, isHolidayOrWeekend, holidaySet, recurringSet);
         return acc + totalAmount;
       } catch (e) {
         return acc;
       }
     }, 0);
+
+    // Get external hours for this doctor in the same period
+    const externalHoursData = await prisma.externalHours.findMany({
+      where: {
+        doctorId,
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+      },
+    });
+
+    const externalHoursTotal = externalHoursData.reduce((sum, e) => sum + Number(e.hours), 0);
+    const externalPayment = externalHoursData.reduce((sum, e) => sum + (Number(e.hours) * Number(e.rate)), 0);
+
+    // Get doctor's hasDiscount status
+    const doctorFull = await prisma.user.findUnique({
+      where: { id: doctorId },
+      select: { hasDiscount: true },
+    });
+
+    // Get active discount
+    const activeDiscount = await prisma.discount.findFirst({
+      where: { isActive: true },
+      orderBy: { validFrom: 'desc' },
+    });
+    const discountAmount = activeDiscount ? Number(activeDiscount.amount) : 0;
+
+    // Calculate bruto and final payment
+    const brutoPayment = shiftsPayment + externalPayment;
+    const hasDiscount = doctorFull?.hasDiscount || false;
+    const finalPayment = hasDiscount && discountAmount > 0 
+      ? Math.max(0, brutoPayment - discountAmount) 
+      : brutoPayment;
 
     res.json({
       doctor,
@@ -412,8 +533,14 @@ export const getDoctorHours = async (
         rotatingHours: Math.round(rotatingHours * 100) / 100,
         weekendHours: Math.round(weekendHours * 100) / 100,
         shiftCount: shifts.length,
+        externalHours: Math.round(externalHoursTotal * 100) / 100,
       },
-      totalPayment: Math.round(totalPayment * 100) / 100,
+      shiftsPayment: Math.round(shiftsPayment * 100) / 100,
+      externalPayment: Math.round(externalPayment * 100) / 100,
+      brutoPayment: Math.round(brutoPayment * 100) / 100,
+      hasDiscount,
+      discountAmount: hasDiscount ? discountAmount : 0,
+      finalPayment: Math.round(finalPayment * 100) / 100,
       shifts,
     });
   } catch (error) {
@@ -453,6 +580,17 @@ export const getWeekendCoverage = async (
             specialty: true,
           },
         },
+        doctors: {
+          include: {
+            doctor: {
+              select: {
+                id: true,
+                name: true,
+                specialty: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { startDateTime: 'asc' },
     });
@@ -479,7 +617,7 @@ export const getWeekendCoverage = async (
       weekKey: key,
       shifts: wShifts,
       totalShifts: wShifts.length,
-      assignedShifts: wShifts.filter((s) => s.doctorId).length,
+      assignedShifts: wShifts.filter((s) => (s.doctors && s.doctors.length > 0) || s.doctorId).length,
     }));
 
     res.json({
@@ -487,7 +625,7 @@ export const getWeekendCoverage = async (
       year: targetYear,
       weekends,
       totalWeekendShifts: weekendShifts.length,
-      assignedWeekendShifts: weekendShifts.filter((s) => s.doctorId).length,
+      assignedWeekendShifts: weekendShifts.filter((s) => (s.doctors && s.doctors.length > 0) || s.doctorId).length,
     });
   } catch (error) {
     next(error);

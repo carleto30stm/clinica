@@ -157,10 +157,11 @@ export interface DoctorHoursSummary {
   fixedShifts: number;
   rotatingShifts: number;
   totalPayment?: number;
+  brutoPayment?: number;  // Pago bruto antes de descuentos
   paymentBreakdown?: Array<{ periodType: string; hours: number; amount: number }>;
   hasDiscount?: boolean;
   discountAmount?: number;
-  finalPayment?: number;  // totalPayment - discountAmount
+  finalPayment?: number;  // brutoPayment - discountAmount
   externalHours?: number;  // Horas de consultorio externo
   externalPayment?: number;  // Pago por consultorio externo
 }

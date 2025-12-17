@@ -4,3 +4,4 @@ export * from './useUsers';
 export * from './useHolidays';
 export * from './useRates';
 export * from './useExternalHours';
+export * from './useDiscounts';

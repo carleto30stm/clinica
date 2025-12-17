@@ -6,11 +6,16 @@ import validate from '../middleware/validate';
 
 const router = Router();
 
+// All routes require authentication
 router.use(authenticate);
+
+// This route is accessible by all authenticated users (doctors need to see their discount)
+router.get('/active', discountController.getActive);
+
+// All routes below require admin permissions
 router.use(requireAdmin);
 
 router.get('/', discountController.getAll);
-router.get('/active', discountController.getActive);
 
 router.post(
   '/',
