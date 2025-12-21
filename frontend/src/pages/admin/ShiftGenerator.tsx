@@ -38,7 +38,6 @@ import {
   eachDayOfInterval, 
   addDays,
   getDay,
-  isSameDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseArgentinaDate } from '../../utils/dateHelpers';
@@ -75,7 +74,7 @@ export const ShiftGenerator: React.FC = () => {
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('08:00');
   // Removed UI control for 24h guard; default to false so shifts do not span next day by default
-  const [nextDayEnd, setNextDayEnd] = useState(false); // Guardia de 24h (disabled by default)
+  const [nextDayEnd] = useState(false); // Guardia de 24h (disabled by default)
   
   // Day selection
   // Default checkboxes are unchecked per UX request

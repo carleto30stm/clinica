@@ -19,7 +19,7 @@ import {
 import { shiftApi } from '../../api/shifts';
 import { statsApi } from '../../api/stats';
 import { Shift } from '../../types';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useRates, useHolidays } from '../../hooks';
 import { parseArgentinaDate } from '../../utils/dateHelpers';
@@ -56,7 +56,6 @@ export const MyShifts: React.FC = () => {
   // Get external hours for the same month
   const monthParts = appliedMonth.split('-');
   const year = parseInt(monthParts[0]);
-  const month = parseInt(monthParts[1]);
 
   // Load holidays for this year so we can compute per-hour holiday rates on the client
   const { data: holidays = [] } = useHolidays({ year });
@@ -79,25 +78,7 @@ export const MyShifts: React.FC = () => {
 
   const handleApplyMonth = () => setAppliedMonth(selectedMonth);
 
-  const handlePrevMonth = () => setSelectedMonth((prev) => {
-    const [y, m] = prev.split('-').map(Number);
-    const d = new Date(y, m - 1, 1);
-    const prevMonth = subMonths(d, 1);
-    const val = format(prevMonth, 'yyyy-MM');
-    setSelectedMonth(val);
-    setAppliedMonth(val);
-    return val;
-  });
 
-  const handleNextMonth = () => setSelectedMonth((prev) => {
-    const [y, m] = prev.split('-').map(Number);
-    const d = new Date(y, m - 1, 1);
-    const nextMonth = addMonths(d, 1);
-    const val = format(nextMonth, 'yyyy-MM');
-    setSelectedMonth(val);
-    setAppliedMonth(val);
-    return val;
-  });
 
   const loadShifts = async () => {
     setLoading(true);

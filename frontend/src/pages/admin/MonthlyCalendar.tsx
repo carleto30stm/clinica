@@ -33,7 +33,7 @@ const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 const getPrimaryDoctorId = (shift: Shift): string | null => {
   // Prefer the first entry in the new doctors relation, otherwise fallback to legacy doctorId
-  if (shift.doctors && shift.doctors.length > 0) return shift.doctors[0].doctorId;
+  if (shift.doctors && shift.doctors.length > 0) return shift.doctors[0].doctor.id;
   return shift.doctorId || null;
 };
 
@@ -256,7 +256,7 @@ export const MonthlyCalendar: React.FC<MonthlyCalendarProps> = ({ readOnly = fal
     const dateStr = format(date, 'yyyy-MM-dd');
     return shifts.filter((shift) => {
       const shiftDate = format(new Date(shift.startDateTime), 'yyyy-MM-dd');
-      if (filterDoctor && !(((shift.doctors && shift.doctors.some(d => d.doctorId === filterDoctor)) || shift.doctorId === filterDoctor))) return false;
+      if (filterDoctor && !(((shift.doctors && shift.doctors.some(d => d.doctor.id === filterDoctor)) || shift.doctorId === filterDoctor))) return false;
       return shiftDate === dateStr;
     });
   };
