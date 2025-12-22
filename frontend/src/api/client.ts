@@ -1,8 +1,12 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
 
+// Use Vite env var VITE_BACKEND_URL if provided, otherwise fall back to the dev proxy path '/api'
+const backendOrigin = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
+const apiBase = backendOrigin ? `${backendOrigin}/api` : '/api';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBase,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -35,7 +39,9 @@ api.interceptors.response.use(
         try {
           const tokens = useAuthStore.getState().tokens;
           if (tokens?.refreshToken) {
-            const response = await axios.post('/api/auth/refresh', {
+            // Use absolute refresh URL so it works whether the backend is on same origin or a remote host
+            const refreshUrl = backendOrigin ? `${backendOrigin}/api/auth/refresh` : '/api/auth/refresh';
+            const response = await axios.post(refreshUrl, {
               refreshToken: tokens.refreshToken,
             });
             
