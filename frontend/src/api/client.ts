@@ -58,6 +58,22 @@ api.interceptors.response.use(
         }
       }
     }
+    // If we reach here and status is 401 (not handled by refresh flow), force logout and redirect
+    if (error.response?.status === 401) {
+      try {
+        useAuthStore.getState().logout();
+      } catch (e) {
+        // ignore
+      }
+      // Navigate to login without forcing full page reload to avoid 404 on SPA hosts
+      try {
+        window.history.replaceState({}, '', '/login');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } catch (e) {
+        // Fallback to full navigation if history APIs are unavailable
+        window.location.href = '/login';
+      }
+    }
 
     return Promise.reject(error);
   }
