@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../config/database';
 import { config } from '../config/constants';
+import { parseDurationToMs } from '../utils/helpers';
 import { LoginRequest, JwtPayload, TokenPair } from '../types';
 
 /**
@@ -61,12 +62,13 @@ export const login = async (
 
     const tokens = generateTokens(user.id, user.role);
 
-    // Save refresh token
+    // Save refresh token with expiresAt based on config
+    const refreshMs = parseDurationToMs(String(config.jwt.refreshExpiresIn));
     await prisma.refreshToken.create({
       data: {
         token: tokens.refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + refreshMs),
       },
     });
 
@@ -136,12 +138,13 @@ export const refreshToken = async (
     // Generate new tokens
     const tokens = generateTokens(storedToken.user.id, storedToken.user.role);
 
-    // Save new refresh token
+    // Save new refresh token with expiresAt based on config
+    const refreshMs2 = parseDurationToMs(String(config.jwt.refreshExpiresIn));
     await prisma.refreshToken.create({
       data: {
         token: tokens.refreshToken,
         userId: storedToken.user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + refreshMs2),
       },
     });
 

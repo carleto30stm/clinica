@@ -82,3 +82,31 @@ export const pick = <T extends object, K extends keyof T>(
   });
   return result;
 };
+
+/**
+ * Parse a short duration string to milliseconds.
+ * Supported suffixes: ms, s, m, h, d
+ * Examples: '15m' -> 900000, '12h' -> 43200000, '7d' -> 604800000
+ */
+export const parseDurationToMs = (val: string): number => {
+  if (!val || typeof val !== 'string') return 0;
+  const s = val.trim();
+  const match = s.match(/^([0-9]+)\s*(ms|s|m|h|d)?$/i);
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  const unit = (match[2] || 'ms').toLowerCase();
+  switch (unit) {
+    case 'ms':
+      return n;
+    case 's':
+      return n * 1000;
+    case 'm':
+      return n * 60 * 1000;
+    case 'h':
+      return n * 60 * 60 * 1000;
+    case 'd':
+      return n * 24 * 60 * 60 * 1000;
+    default:
+      return 0;
+  }
+};
