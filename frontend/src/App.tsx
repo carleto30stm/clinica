@@ -1,4 +1,4 @@
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, HashRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeProvider, CssBaseline } from '@mui/material';
@@ -16,9 +16,15 @@ const App: React.FC = () => {
       <ThemeProvider theme={theme}>
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={es}>
           <CssBaseline />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
+          {import.meta.env.VITE_USE_HASH_ROUTER === 'true' ? (
+            <HashRouter>
+              <AppRoutes />
+            </HashRouter>
+          ) : (
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          )}
         </LocalizationProvider>
       </ThemeProvider>
       {/* DevTools solo en desarrollo */}
