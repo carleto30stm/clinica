@@ -151,9 +151,12 @@ export const calculateShiftPayment = (
   const current = new Date(start);
   const pad = (n: number) => String(n).padStart(2, '0');
 
-  // Determine if the ENTIRE shift is holiday/weekend based ONLY on the start date
+  // Determine if the ENTIRE shift is holiday/weekend.
+  // Priority: respect the caller-provided `dayCategory` flag from the payload.
+  // Only if the caller did NOT mark the shift as holiday/weekend, fall back
+  // to checking the provided holiday sets based on the shift start date.
   let isShiftHolidayOrWeekend = dayCategory === 'WEEKEND' || dayCategory === 'HOLIDAY';
-  if (holidaySet || recurringSet) {
+  if (!isShiftHolidayOrWeekend && (holidaySet || recurringSet)) {
     const y = start.getFullYear();
     const m = pad(start.getMonth() + 1);
     const d = pad(start.getDate());
