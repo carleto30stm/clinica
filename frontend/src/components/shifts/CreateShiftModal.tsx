@@ -40,6 +40,7 @@ interface CreateShiftModalProps {
   date: Date | null;
   doctors: DoctorOption[];
   onSave: (data: CreateShiftData) => Promise<void>;
+  isDatePicker?: boolean;
 }
 
 // Get initials from name
@@ -80,12 +81,14 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
   date,
   doctors,
   onSave,
+  isDatePicker = false,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDatePicker, setSelectedDatePicker] = useState<Date | null>(date);
   
   // Form state
   const [selectedPreset, setSelectedPreset] = useState(0); // Default to 24h shift
@@ -119,6 +122,7 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
       // reset holiday fields
       setIsHoliday(false);
       setSelectedHoliday(null);
+      setSelectedDatePicker(date);
 
       // If the date corresponds to an existing holiday, preselect it
       if (date && holidays.length > 0) {
@@ -137,6 +141,11 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
     }
   }, [open, holidays, date]);
 
+  useEffect(() => {
+    // keep internal picker in sync when parent date changes
+    setSelectedDatePicker(date);
+  }, [date]);
+
   // Update times when preset changes
   useEffect(() => {
     const preset = SHIFT_PRESETS[selectedPreset];
@@ -148,18 +157,19 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
   }, [selectedPreset]);
 
   const handleSave = async () => {
-    if (!date) return;
+    const usedDate = isDatePicker ? selectedDatePicker : date;
+    if (!usedDate) return;
     
     setError(null);
     setSaving(true);
 
     try {
       // Build start and end dates
-      const startDate = new Date(date);
+      const startDate = new Date(usedDate);
       const [startHour, startMin] = startTime.split(':').map(Number);
       startDate.setHours(startHour, startMin, 0, 0);
 
-      const endDate = new Date(date);
+      const endDate = new Date(usedDate);
       if (isNextDay) {
         endDate.setDate(endDate.getDate() + 1);
       }
@@ -225,6 +235,21 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
           </Alert>
+        )}
+
+        {/* Date picker when requested */}
+        {isDatePicker && (
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              label="Fecha"
+              type="date"
+              value={selectedDatePicker ? format(selectedDatePicker, 'yyyy-MM-dd') : ''}
+              onChange={(e) => setSelectedDatePicker(e.target.value ? new Date(e.target.value) : null)}
+              fullWidth
+              size="small"
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
         )}
 
         {/* Preset selector */}

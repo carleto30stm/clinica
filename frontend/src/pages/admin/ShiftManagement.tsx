@@ -73,6 +73,8 @@ import { formatMonthYear, formatDateLong, formatDate, formatTime } from '../../u
 import { isValidMonth, isValidDateString } from '../../utils/validators';
 import MonthDayFilter from '../../components/filters/MonthDayFilter';
 import ConfirmModal from '../../components/modal/ConfirmModal';
+import CreateShiftModal from '../../components/shifts/CreateShiftModal';
+import EditShiftModal from '../../components/shifts/EditShiftModal';
 
 export const ShiftManagement: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -521,87 +523,30 @@ export const ShiftManagement: React.FC = () => {
         loading={loading}
       />
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingShift ? 'Editar Turno' : 'Nuevo Turno'}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            <TextField
-              fullWidth
-              label="Fecha y hora de inicio"
-              type="datetime-local"
-              value={formData.startDateTime}
-              onChange={(e) => setFormData({ ...formData, startDateTime: e.target.value })}
-              margin="normal"
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-            <TextField
-              fullWidth
-              label="Fecha y hora de fin"
-              type="datetime-local"
-              value={formData.endDateTime}
-              onChange={(e) => setFormData({ ...formData, endDateTime: e.target.value })}
-              margin="normal"
-              InputLabelProps={{ shrink: true }}
-              required
-            />
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Tipo de turno</InputLabel>
-              <Select
-                value={formData.type}
-                label="Tipo de turno"
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as 'FIXED' | 'ROTATING' })}
-              >
-                <MenuItem value="FIXED">Fijo</MenuItem>
-                <MenuItem value="ROTATING">Rotativo</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Médico asignado</InputLabel>
-              <Select
-                value={formData.doctorId || ''}
-                label="Médico asignado"
-                onChange={(e) => setFormData({ ...formData, doctorId: e.target.value || null })}
-              >
-                <MenuItem value="">Sin asignar</MenuItem>
-                {doctors.map((doctor) => (
-                  <MenuItem key={doctor.id} value={doctor.id}>
-                    {doctor.name} - {doctor.specialty}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={formData.selfAssignable}
-                  onChange={(e) => setFormData({ ...formData, selfAssignable: e.target.checked })}
-                />
-              }
-              label="Disponible para auto-asignación (solo fines de semana/feriados)"
-              sx={{ mt: 1 }}
-            />
-            <TextField
-              fullWidth
-              label="Notas"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              margin="normal"
-              multiline
-              rows={2}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancelar</Button>
-          <Button onClick={handleSave} variant="contained">
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EditShiftModal
+        open={!!editingShift}
+        onClose={handleCloseDialog}
+        shift={editingShift}
+        doctors={doctors}
+        onUpdate={async (id, data) => {
+          await shiftApi.update(id, data);
+          handleCloseDialog();
+          await loadData();
+        }}
+      />
+
+      <CreateShiftModal
+        open={dialogOpen && !editingShift}
+        onClose={handleCloseDialog}
+        date={formData.startDateTime ? new Date(formData.startDateTime) : null}
+        doctors={doctors}
+        isDatePicker={true}
+        onSave={async (data) => {
+          await shiftApi.create(data);
+          handleCloseDialog();
+          await loadData();
+        }}
+      />
       {/* Snackbar for success/error */}
       <Snackbar
         open={snackbar.open}
