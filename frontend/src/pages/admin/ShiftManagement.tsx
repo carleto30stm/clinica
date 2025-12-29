@@ -205,28 +205,6 @@ export const ShiftManagement: React.FC = () => {
     setEditingShift(null);
   };
 
-  const handleSave = async () => {
-    try {
-      const data = {
-        ...formData,
-        startDateTime: new Date(formData.startDateTime).toISOString(),
-        endDateTime: new Date(formData.endDateTime).toISOString(),
-        // Send null for unassigned doctor instead of empty string to satisfy backend validation
-        doctorId: formData.doctorId || null,
-      };
-
-      if (editingShift) {
-        await shiftApi.update(editingShift.id, data);
-      } else {
-        await shiftApi.create(data);
-      }
-      handleCloseDialog();
-      loadData();
-    } catch (err) {
-      setError('Error al guardar el turno');
-    }
-  };
-
   const handleDelete = async (id: string | null) => {
     if (!id) return;
     try {
