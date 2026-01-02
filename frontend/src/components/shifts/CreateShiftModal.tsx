@@ -32,7 +32,7 @@ import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DoctorOption, CreateShiftData, ShiftType, Holiday } from '../../types';
 import { useHolidays } from '../../hooks/useHolidays';
-import { parseArgentinaDate } from '../../utils/dateHelpers';
+import { parseArgentinaDate, formatArgentinaDate } from '../../utils/dateHelpers';
 
 interface CreateShiftModalProps {
   open: boolean;
@@ -243,8 +243,11 @@ export const CreateShiftModal: React.FC<CreateShiftModalProps> = ({
             <TextField
               label="Fecha"
               type="date"
-              value={selectedDatePicker ? format(selectedDatePicker, 'yyyy-MM-dd') : ''}
-              onChange={(e) => setSelectedDatePicker(e.target.value ? new Date(e.target.value) : null)}
+              value={selectedDatePicker ? formatArgentinaDate(selectedDatePicker) : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedDatePicker(val ? parseArgentinaDate(val) : null);
+              }}
               fullWidth
               size="small"
               InputLabelProps={{ shrink: true }}
