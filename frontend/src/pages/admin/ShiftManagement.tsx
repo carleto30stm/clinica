@@ -66,6 +66,7 @@ import MonthDayFilter from '../../components/filters/MonthDayFilter';
 import ConfirmModal from '../../components/modal/ConfirmModal';
 import CreateShiftModal from '../../components/shifts/CreateShiftModal';
 import EditShiftModal from '../../components/shifts/EditShiftModal';
+import { parseArgentinaDate } from '@/utils/dateHelpers';
 
 export const ShiftManagement: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -127,7 +128,7 @@ export const ShiftManagement: React.FC = () => {
           setLoading(false);
           return;
         }
-        const d = new Date(appliedDay);
+        const d = parseArgentinaDate(appliedDay);
         start = startOfDay(d);
         end = endOfDay(d);
       } else {
