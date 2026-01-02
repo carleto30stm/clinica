@@ -81,10 +81,21 @@ export const generateSchedulePdf = async (req: Request, res: Response, next: Nex
           if (current) lines.push(current);
           return lines;
         };
+    
+    // Argentina timezone offset (UTC-3) for consistent date handling regardless of server timezone
+    const ARGENTINA_OFFSET_MS = -3 * 60 * 60 * 1000;
+    
+    // Helper to get Argentina date string from a UTC timestamp
+    const getArgentinaDateKey = (date: Date): string => {
+      const argentinaDate = new Date(date.getTime() + ARGENTINA_OFFSET_MS);
+      return dfFormat(argentinaDate, 'yyyy-MM-dd');
+    };
+    
     const shiftsByDay = new Map<string, any[]>();
     for (const s of shifts) {
       const d = new Date(s.startDateTime);
-      const key = dfFormat(d, 'yyyy-MM-dd');
+      // Use Argentina timezone for day mapping
+      const key = getArgentinaDateKey(d);
       const list = shiftsByDay.get(key) || [];
       list.push(s);
       shiftsByDay.set(key, list);
@@ -152,16 +163,16 @@ export const generateSchedulePdf = async (req: Request, res: Response, next: Nex
             doc.rect(x, y, dayColWidth, tableRowHeight).stroke();
             const day = wk[dow];
             if (day) {
+              // Use local date format (the day object is already in local time from eachDayOfInterval)
               const key = dfFormat(day, 'yyyy-MM-dd');
               const dayShifts = shiftsByDay.get(key) || [];
               const slotDoctors: string[] = [];
               for (const s of dayShifts) {
                 const sStart = new Date(s.startDateTime);
                 const sEnd = new Date(s.endDateTime);
-                // Convert UTC to Argentina time (UTC-3) to get consistent hours regardless of server timezone
-                const argentinaOffset = -3 * 60; // minutes
-                const startHour = new Date(sStart.getTime() + argentinaOffset * 60 * 1000).getUTCHours();
-                const endHour = new Date(sEnd.getTime() + argentinaOffset * 60 * 1000).getUTCHours();
+                // Use Argentina timezone to get consistent hours
+                const startHour = new Date(sStart.getTime() + ARGENTINA_OFFSET_MS).getUTCHours();
+                const endHour = new Date(sEnd.getTime() + ARGENTINA_OFFSET_MS).getUTCHours();
                 
                 // Check intersection based on slot type
                 let intersects = false;
