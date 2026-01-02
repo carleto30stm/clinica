@@ -20,8 +20,6 @@ export const MonthDayFilter: React.FC<Props> = ({
   selectedMonth,
   setSelectedMonth,
   applyMonth,
-  monthInputError,
-  setMonthInputError,
   selectedDay,
   setSelectedDay,
   applyDay,
