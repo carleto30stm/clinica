@@ -42,6 +42,7 @@ import {
 import { es } from 'date-fns/locale';
 import { parseArgentinaDate } from '../../utils/dateHelpers';
 import { formatArgentinaDate } from '../../utils/dateHelpers';
+import { DatePicker } from '@mui/x-date-pickers';
 
 interface ShiftPreview {
   date: Date;
@@ -214,6 +215,22 @@ export const ShiftGenerator: React.FC = () => {
     }
   };
 
+  const parseMonthToDate = (monthStr: string): Date | null => {
+    try {
+      const [year, month] = monthStr.split('-');
+      return new Date(parseInt(year), parseInt(month) - 1, 1);
+    } catch {
+      return null;
+    }
+  };
+
+  const formatDateToMonth = (date: Date | null): string => {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
   const weekdayCount = preview.filter(s => !s.isWeekend && !s.isHoliday).length;
   const weekendCount = preview.filter(s => s.isWeekend).length;
   const holidayCount = preview.filter(s => s.isHoliday).length;
@@ -248,14 +265,21 @@ export const ShiftGenerator: React.FC = () => {
             <CalendarIcon /> Configuración
           </Typography>
           
-          <TextField
+          <DatePicker
+            views={['year', 'month']}
             label="Mes"
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            fullWidth
-            margin="normal"
-            InputLabelProps={{ shrink: true }}
+            openTo="month"
+            value={parseMonthToDate(selectedMonth)}
+            onChange={(e) => {
+              const formatted = formatDateToMonth(e);
+              if (formatted) setSelectedMonth(formatted);
+            }}
+            slotProps={{
+              textField: {
+                size: 'small',
+                sx: { minWidth: 200 },
+              },
+            }}
           />
 
           <Divider sx={{ my: 2 }} />

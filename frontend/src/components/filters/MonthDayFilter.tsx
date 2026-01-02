@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, TextField } from '@mui/material';
 import { format } from 'date-fns';
+import { DatePicker } from '@mui/x-date-pickers';
 
 interface Props {
   selectedMonth: string;
@@ -27,26 +28,40 @@ export const MonthDayFilter: React.FC<Props> = ({
   dayInputError,
   setDayInputError,
 }) => {
+
+  const parseMonthToDate = (monthStr: string): Date | null => {
+    try {
+      const [year, month] = monthStr.split('-');
+      return new Date(parseInt(year), parseInt(month) - 1, 1);
+    } catch {
+      return null;
+    }
+  };
+
+  const formatDateToMonth = (date: Date | null): string => {
+    if (!date) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
   return (
     <Box display="flex" gap={1} alignItems="center">
-      <TextField
+      <DatePicker
+        views={['year', 'month']}
         label="Mes"
-        type="month"
-        value={selectedMonth}
+        value={parseMonthToDate(selectedMonth)}
         onChange={(e) => {
-          setSelectedMonth(e.target.value);
-          if (monthInputError) setMonthInputError(null);
+          const formatted = formatDateToMonth(e)
+          if (formatted) setSelectedMonth(formatted);
         }}
-        size="small"
-        InputLabelProps={{ shrink: true }}
-        error={!!monthInputError}
-        helperText={monthInputError || undefined}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            applyMonth(selectedMonth);
-          }
-        }}
+        openTo="month"
+        slotProps={{
+            textField: {
+              size: 'small',
+              sx: { minWidth: 200 },
+            },
+          }}
       />
 
       <TextField

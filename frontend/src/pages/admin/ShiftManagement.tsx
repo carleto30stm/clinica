@@ -424,9 +424,10 @@ export const ShiftManagement: React.FC = () => {
                   )}
                 </TableCell>
                 <TableCell align="center">
-                  <IconButton onClick={() => handleOpenDialog(shift)} title="Editar">
+                  {/* TODO: habilitar botn de editar cuando este completo */}
+                  {/* <IconButton onClick={() => handleOpenDialog(shift)} title="Editar">
                     <EditIcon />
-                  </IconButton>
+                  </IconButton> */}
                   <IconButton onClick={() => requestDelete(shift.id)} color="error" title="Eliminar">
                     <DeleteIcon />
                   </IconButton>
