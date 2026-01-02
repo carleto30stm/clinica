@@ -48,8 +48,13 @@ export const calculateShiftPaymentFromRates = (
     isShiftHolidayOrWeekend = isSpecificHoliday || isRecurrentHoliday || isWeekend;
   }
 
+  // Argentina timezone offset (UTC-3) for consistent hour calculation regardless of server timezone
+  const ARGENTINA_OFFSET_MS = -3 * 60 * 60 * 1000;
+
   while (current < end) {
-    const hour = current.getHours();
+    // Convert to Argentina time to get consistent hours on any server (local or Railway/UTC)
+    const argentinaTime = new Date(current.getTime() + ARGENTINA_OFFSET_MS);
+    const hour = argentinaTime.getUTCHours();
     const isDay = hour >= DAY_START && hour < DAY_END;
 
     // ---------------------------------------------------------------------------
