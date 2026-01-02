@@ -158,9 +158,25 @@ export const generateSchedulePdf = async (req: Request, res: Response, next: Nex
               for (const s of dayShifts) {
                 const sStart = new Date(s.startDateTime);
                 const sEnd = new Date(s.endDateTime);
-                const startHour = sStart.getUTCHours();
-                const endHour = sEnd.getUTCHours();
-                const intersects = slot.start < slot.end ? !(endHour <= slot.start || startHour >= slot.end) : !(endHour <= slot.start && startHour >= slot.end);
+                // Use local hours (getHours) not UTC to match Argentina timezone
+                const startHour = sStart.getHours();
+                const endHour = sEnd.getHours();
+                
+                // Check intersection based on slot type
+                let intersects = false;
+                if (slot.start < slot.end) {
+                  // Normal slot (9-15, 15-21): shift intersects if it overlaps the range
+                  // Shift [startHour, endHour) intersects [slot.start, slot.end) 
+                  // when startHour < slot.end AND endHour > slot.start
+                  // But for same-day shifts: endHour=0 means midnight, treat as 24
+                  const effectiveEnd = endHour === 0 ? 24 : endHour;
+                  intersects = startHour < slot.end && effectiveEnd > slot.start;
+                } else {
+                  // Overnight slot (21-9): startHour >= 21 OR endHour <= 9 (but not exactly at boundaries)
+                  // A shift is in this slot if it starts at or after 21, OR ends at or before 9 (next day)
+                  intersects = startHour >= slot.start || (endHour > 0 && endHour <= slot.end);
+                }
+                
                 if (intersects) {
                   if (s.doctors && s.doctors.length > 0) (s.doctors as any[]).forEach((d: any) => slotDoctors.push(d.doctor.name));
                   else if (s.doctor) slotDoctors.push(s.doctor.name);
